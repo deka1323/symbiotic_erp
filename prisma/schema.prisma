@@ -1,0 +1,524 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique @db.VarChar(255)
+  username     String?  @unique @db.VarChar(100)
+  fullName     String?  @map("full_name") @db.VarChar(255)
+  passwordHash String   @map("password_hash")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userRoles                 UserRole[]
+  userRoleFeaturePrivileges UserRoleFeaturePrivilege[]
+  sessions                  UserSession[]
+  userInventories           UserInventory[]
+  stockHistories            StockHistory[]
+  purchaseOrders            PurchaseOrder[] @relation("PurchaseOrderCreator")
+  transferOrders            TransferOrder[] @relation("TransferOrderCreator")
+  receiveOrders             ReceiveOrder[] @relation("ReceiveOrderCreator")
+  batches                   Batch[] @relation("BatchCreator")
+
+  @@index([email])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  code        String   @unique @map("code") @db.VarChar(100)
+  name        String   @map("name") @db.VarChar(150)
+  description String?  @db.Text
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  roleModules               RoleModule[]
+  userRoles                 UserRole[]
+  roleFeaturePrivileges     RoleFeaturePrivilege[]
+  userRoleFeaturePrivileges UserRoleFeaturePrivilege[]
+
+  @@map("roles")
+}
+
+model Module {
+  id          String   @id @default(uuid())
+  code        String   @unique @map("code") @db.VarChar(100)
+  name        String   @map("name") @db.VarChar(255)
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  roleModules RoleModule[]
+  features    Feature[]
+
+  @@map("modules")
+}
+
+model RoleModule {
+  id        String   @id @default(uuid())
+  roleId    String   @map("role_id")
+  moduleId  String   @map("module_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, moduleId])
+  @@index([roleId])
+  @@index([moduleId])
+  @@map("role_modules")
+}
+
+model Feature {
+  id          String  @id @default(uuid())
+  moduleId    String  @map("module_id")
+  code        String  @map("code") @db.VarChar(100)
+  name        String  @map("name") @db.VarChar(255)
+  description String? @db.Text
+  isActive    Boolean @default(true) @map("is_active")
+
+  // Relations
+  module                    Module                     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  featurePrivileges         FeaturePrivilege[]
+  roleFeaturePrivileges     RoleFeaturePrivilege[]
+  userRoleFeaturePrivileges UserRoleFeaturePrivilege[]
+
+  @@unique([moduleId, code])
+  @@index([moduleId])
+  @@map("features")
+}
+
+model Privilege {
+  id          String  @id @default(uuid())
+  code        String  @unique @map("code") @db.VarChar(100)
+  description String? @db.Text
+
+  // Relations
+  featurePrivileges         FeaturePrivilege[]
+  roleFeaturePrivileges     RoleFeaturePrivilege[]
+  userRoleFeaturePrivileges UserRoleFeaturePrivilege[]
+
+  @@map("privileges")
+}
+
+model FeaturePrivilege {
+  id          String @id @default(uuid())
+  featureId   String @map("feature_id")
+  privilegeId String @map("privilege_id")
+
+  // Relations
+  feature   Feature   @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  privilege Privilege @relation(fields: [privilegeId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, privilegeId])
+  @@index([featureId])
+  @@index([privilegeId])
+  @@map("feature_privileges")
+}
+
+model RoleFeaturePrivilege {
+  id          String   @id @default(uuid())
+  roleId      String   @map("role_id")
+  featureId   String   @map("feature_id")
+  privilegeId String   @map("privilege_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  feature   Feature   @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  privilege Privilege @relation(fields: [privilegeId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, featureId, privilegeId])
+  @@index([roleId])
+  @@index([featureId])
+  @@index([privilegeId])
+  @@map("role_feature_privileges")
+}
+
+model UserRole {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  roleId     String   @map("role_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model UserRoleFeaturePrivilege {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  roleId      String   @map("role_id")
+  featureId   String   @map("feature_id")
+  privilegeId String   @map("privilege_id")
+  isAllowed   Boolean  @map("is_allowed")
+  reason      String?  @db.Text
+  assignedAt  DateTime @default(now()) @map("assigned_at")
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  feature   Feature   @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  privilege Privilege @relation(fields: [privilegeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, featureId, privilegeId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([featureId])
+  @@index([privilegeId])
+  @@map("user_role_feature_privileges")
+}
+
+model UserSession {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  sessionId String   @unique @map("session_id") @db.VarChar(255)
+  userAgent String?  @map("user_agent") @db.Text
+  ipAddress String?  @map("ip_address") @db.Text
+  isValid   Boolean  @default(true) @map("is_valid")
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_sessions")
+}
+
+// Inventory Management Models
+
+enum InventoryType {
+  PRODUCTION
+  HUB
+  STORE
+}
+
+model Inventory {
+  id        String        @id @default(uuid())
+  code      String        @unique @db.VarChar(100)
+  name      String        @db.VarChar(255)
+  type      InventoryType
+  address   String?       @db.Text
+  contact   String?       @db.VarChar(255)
+  isActive  Boolean       @default(true) @map("is_active")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  stocks             Stock[]
+  batches            Batch[]
+  purchaseOrdersFrom PurchaseOrder[] @relation("PurchaseOrderFrom")
+  purchaseOrdersTo   PurchaseOrder[] @relation("PurchaseOrderTo")
+  receiveOrders      ReceiveOrder[] @relation("ReceiveOrderTo")
+  userInventories    UserInventory[]
+  StockHistory       StockHistory[]
+
+  @@index([code])
+  @@index([type])
+  @@map("inventories")
+}
+
+model SKU {
+  id          String   @id @default(uuid())
+  code        String   @unique @db.VarChar(100)
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  unit        String   @default("packets") @db.VarChar(50)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  batchItems     BatchItem[]
+  stocks         Stock[]
+  stockHistories StockHistory[]
+  poItems        POItem[]
+  toItems        TOItem[]
+  roItems        ROItem[]
+
+  @@index([code])
+  @@map("skus")
+}
+
+model Employee {
+  id         String   @id @default(uuid())
+  code       String   @unique @db.VarChar(100)
+  name       String   @db.VarChar(255)
+  email      String?  @db.VarChar(255)
+  phone      String?  @db.VarChar(50)
+  department String?  @db.VarChar(255)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  transferOrders TransferOrder[]
+
+  @@index([code])
+  @@map("employees")
+}
+
+model Batch {
+  id             String   @id @default(uuid())
+  batchId        String   @unique @db.VarChar(50)
+  inventoryId    String   @map("inventory_id")
+  productionDate DateTime @map("production_date")
+  createdById    String?  @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  inventory     Inventory     @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  createdBy     User?         @relation("BatchCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  batchItems    BatchItem[]
+  stocks        Stock[]
+  stockHistories StockHistory[]
+  toItems       TOItem[]
+  roItems       ROItem[]
+
+  @@index([batchId])
+  @@index([inventoryId])
+  @@index([productionDate])
+  @@index([createdById])
+  @@map("batches")
+}
+
+model BatchItem {
+  id       String @id @default(uuid())
+  batchId  String @map("batch_id")
+  skuId    String @map("sku_id")
+  quantity Int
+
+  // Relations
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  sku   SKU   @relation(fields: [skuId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, skuId])
+  @@index([batchId])
+  @@index([skuId])
+  @@map("batch_items")
+}
+
+model Stock {
+  id          String   @id @default(uuid())
+  inventoryId String   @map("inventory_id")
+  skuId       String   @map("sku_id")
+  batchId     String   @map("batch_id")
+  quantity    Int      @default(0)
+  lastUpdated DateTime @default(now()) @updatedAt @map("last_updated")
+
+  // Relations
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  sku       SKU       @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  batch     Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([inventoryId, skuId, batchId])
+  @@index([inventoryId])
+  @@index([skuId])
+  @@index([batchId])
+  @@map("stocks")
+}
+
+model StockHistory {
+  id          String   @id @default(uuid())
+  inventoryId String   @map("inventory_id")
+  skuId       String   @map("sku_id")
+  batchId     String?  @map("batch_id")
+  userId      String   @map("user_id")
+  oldQuantity Int      @map("old_quantity")
+  newQuantity Int      @map("new_quantity")
+  reason      String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  sku       SKU       @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  batch     Batch?    @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([inventoryId])
+  @@index([skuId])
+  @@index([batchId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("stock_history")
+}
+
+// Transfer Management Models
+
+enum POStatus {
+  CREATED
+  IN_TRANSIT
+  FULFILLED
+}
+
+enum TOStatus {
+  CREATED
+  FULFILLED
+}
+
+model PurchaseOrder {
+  id              String   @id @default(uuid())
+  poNumber        String   @unique @db.VarChar(100)
+  fromInventoryId String   @map("from_inventory_id")
+  toInventoryId   String   @map("to_inventory_id")
+  createdById     String?  @map("created_by_id")
+  status          POStatus @default(CREATED)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  fromInventory  Inventory       @relation("PurchaseOrderFrom", fields: [fromInventoryId], references: [id], onDelete: Cascade)
+  toInventory    Inventory       @relation("PurchaseOrderTo", fields: [toInventoryId], references: [id], onDelete: Cascade)
+  createdBy      User?           @relation("PurchaseOrderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  poItems        POItem[]
+  transferOrders TransferOrder[]
+
+  @@index([poNumber])
+  @@index([fromInventoryId])
+  @@index([toInventoryId])
+  @@index([status])
+  @@index([createdById])
+  @@map("purchase_orders")
+}
+
+model POItem {
+  id                String @id @default(uuid())
+  purchaseOrderId   String @map("purchase_order_id")
+  skuId             String @map("sku_id")
+  requestedQuantity Int    @map("requested_quantity")
+
+  // Relations
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  sku           SKU           @relation(fields: [skuId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseOrderId, skuId])
+  @@index([purchaseOrderId])
+  @@index([skuId])
+  @@map("po_items")
+}
+
+model TransferOrder {
+  id              String   @id @default(uuid())
+  toNumber        String   @unique @db.VarChar(100)
+  purchaseOrderId String?  @map("purchase_order_id")
+  employeeId      String   @map("employee_id")
+  createdById     String?  @map("created_by_id")
+  status          TOStatus @default(CREATED)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  employee      Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy     User?          @relation("TransferOrderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  toItems       TOItem[]
+  receiveOrder  ReceiveOrder?
+
+  @@index([toNumber])
+  @@index([purchaseOrderId])
+  @@index([employeeId])
+  @@index([createdById])
+  @@index([status])
+  @@map("transfer_orders")
+}
+
+model TOItem {
+  id               String @id @default(uuid())
+  transferOrderId  String @map("transfer_order_id")
+  skuId            String @map("sku_id")
+  batchId           String @map("batch_id")
+  sentQuantity     Int    @map("sent_quantity")
+  receivedQuantity Int?   @map("received_quantity")
+
+  // Relations
+  transferOrder TransferOrder @relation(fields: [transferOrderId], references: [id], onDelete: Cascade)
+  sku           SKU           @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  batch         Batch         @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([transferOrderId, skuId, batchId])
+  @@index([transferOrderId])
+  @@index([skuId])
+  @@index([batchId])
+  @@map("to_items")
+}
+
+model ReceiveOrder {
+  id              String   @id @default(uuid())
+  roNumber        String   @unique @db.VarChar(100)
+  transferOrderId String?  @unique @map("transfer_order_id")
+  toInventoryId   String?  @map("to_inventory_id")
+  createdById     String?  @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  transferOrder TransferOrder? @relation(fields: [transferOrderId], references: [id], onDelete: SetNull)
+  toInventory   Inventory?     @relation("ReceiveOrderTo", fields: [toInventoryId], references: [id], onDelete: SetNull)
+  createdBy     User?          @relation("ReceiveOrderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  roItems       ROItem[]
+
+  @@index([roNumber])
+  @@index([transferOrderId])
+  @@index([toInventoryId])
+  @@index([createdById])
+  @@map("receive_orders")
+}
+
+model ROItem {
+  id               String @id @default(uuid())
+  receiveOrderId   String @map("receive_order_id")
+  skuId            String @map("sku_id")
+  batchId           String @map("batch_id")
+  receivedQuantity Int    @map("received_quantity")
+
+  // Relations
+  receiveOrder ReceiveOrder @relation(fields: [receiveOrderId], references: [id], onDelete: Cascade)
+  sku          SKU          @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  batch        Batch        @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([receiveOrderId, skuId, batchId])
+  @@index([receiveOrderId])
+  @@index([skuId])
+  @@index([batchId])
+  @@map("ro_items")
+}
+
+// Access Control Enhancement
+
+model UserInventory {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  inventoryId String   @map("inventory_id")
+  assignedAt  DateTime @default(now()) @map("assigned_at")
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, inventoryId])
+  @@index([userId])
+  @@index([inventoryId])
+  @@map("user_inventories")
+}
