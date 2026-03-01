@@ -664,18 +664,31 @@ async function main() {
   await Promise.all(userInventoryPromises)
   console.log('✅ Assigned managers to relevant inventories')
 
-  // 15. Initialize stock records for each inventory and SKU with small quantities
+  // 15. Initialize stock records for each inventory and SKU with small quantities (one seed batch per inventory)
   console.log('📊 Initializing stock for inventories and SKUs...')
+  const batchByInvId = new Map<string, string>()
+  for (const inv of createdInventories) {
+    const batch = await prisma.batch.create({
+      data: {
+        batchId: `INIT-${inv.code}-${Date.now().toString(36)}`,
+        inventoryId: inv.id,
+        productionDate: new Date(),
+      },
+    })
+    batchByInvId.set(inv.id, batch.id)
+  }
   const stockPromises: any[] = []
   for (const inv of createdInventories) {
+    const batchId = batchByInvId.get(inv.id)!
     for (const sku of createdSkus) {
       stockPromises.push(
         prisma.stock.upsert({
-          where: { inventoryId_skuId: { inventoryId: inv.id, skuId: sku.id } },
+          where: { inventoryId_skuId_batchId: { inventoryId: inv.id, skuId: sku.id, batchId } },
           update: {},
           create: {
             inventoryId: inv.id,
             skuId: sku.id,
+            batchId,
             quantity: Math.floor(Math.random() * 50) + 10,
           },
         })
@@ -715,9 +728,9 @@ async function main() {
 
         // Upsert stock record to add produced quantity
         await tx.stock.upsert({
-          where: { inventoryId_skuId: { inventoryId: productionInventory.id, skuId: item.sku.id } },
-          update: { quantity: { increment: item.quantity } as any },
-          create: { inventoryId: productionInventory.id, skuId: item.sku.id, quantity: item.quantity },
+          where: { inventoryId_skuId_batchId: { inventoryId: productionInventory.id, skuId: item.sku.id, batchId: batch.id } },
+          update: { quantity: { increment: item.quantity } },
+          create: { inventoryId: productionInventory.id, skuId: item.sku.id, batchId: batch.id, quantity: item.quantity },
         })
       }
     })

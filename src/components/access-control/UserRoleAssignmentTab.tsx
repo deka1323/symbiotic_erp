@@ -54,7 +54,7 @@ export function UserRoleAssignmentTab({ user, onSave }: UserRoleAssignmentTabPro
         .get(`/acl/users/${user.id}/roles`, { token: accessToken })
         .then((res: any) => {
           const userRoles = res.data?.data || res.data || []
-          const roleIds = new Set(userRoles.map((ur: any) => ur.role?.id || ur.roleId))
+          const roleIds = new Set<string>(userRoles.map((ur: any) => String(ur.role?.id ?? ur.roleId ?? '')))
           setSelectedRoles(roleIds)
         })
         .catch(console.error)
@@ -91,7 +91,7 @@ export function UserRoleAssignmentTab({ user, onSave }: UserRoleAssignmentTabPro
       // Reload user roles to reflect changes
       const userRolesRes: any = await api.get(`/acl/users/${user.id}/roles`, { token: accessToken })
       const userRoles = userRolesRes.data?.data || userRolesRes.data || []
-      const roleIds = new Set(userRoles.map((ur: any) => ur.role?.id || ur.roleId))
+      const roleIds = new Set<string>(userRoles.map((ur: any) => String(ur.role?.id ?? ur.roleId ?? '')))
       setSelectedRoles(roleIds)
     } catch (error: any) {
       console.error('Failed to assign roles:', error)

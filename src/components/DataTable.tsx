@@ -181,7 +181,7 @@ export function DataTable<T extends Record<string, any>>({
                 const ws = XLSX.utils.json_to_sheet(rows)
                 const wb = XLSX.utils.book_new()
                 XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
-                const wbout = XLSX.utils.write(wb, { bookType: 'xlsx', type: 'array' })
+                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
                 const blob = new Blob([wbout], { type: 'application/octet-stream' })
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')

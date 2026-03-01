@@ -111,9 +111,11 @@ export async function apiFetch<T>(
     authToken = localStorage.getItem('accessToken') || undefined
   }
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...fetchOptions.headers,
+    ...(fetchOptions.headers && typeof fetchOptions.headers === 'object' && !(fetchOptions.headers instanceof Headers)
+      ? (fetchOptions.headers as Record<string, string>)
+      : {}),
   }
 
   if (authToken && !skipAuth) {
@@ -122,7 +124,7 @@ export async function apiFetch<T>(
 
   const config: RequestInit = {
     ...fetchOptions,
-    headers,
+    headers: headers as HeadersInit,
     credentials: 'include',
   }
 

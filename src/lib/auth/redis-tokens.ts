@@ -64,18 +64,18 @@ export async function deleteRefreshToken(sessionId: string): Promise<void> {
 export async function deleteAllUserRefreshTokens(userId: string): Promise<void> {
   const pattern = `refresh_token:*`
   const keys = await redis.keys(pattern)
-  const userKeys = keys.filter((key) => {
+  const userKeys: string[] = []
+  for (const key of keys) {
     try {
-      const data = redis.get(key)
+      const data = await redis.get(key)
       if (data) {
-        const parsed = JSON.parse(data as string)
-        return parsed.userId === userId
+        const parsed = JSON.parse(data) as { userId?: string }
+        if (parsed.userId === userId) userKeys.push(key)
       }
     } catch {
-      return false
+      // skip
     }
-    return false
-  })
+  }
 
   if (userKeys.length > 0) {
     await redis.del(userKeys)

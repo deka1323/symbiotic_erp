@@ -97,7 +97,7 @@ export function withAuth(
   return async (req: NextRequest, context?: any): Promise<NextResponse> => {
     const authResult = await authorize(req, moduleCode, featureCode, privilegeCode)
     if ('error' in authResult) {
-      return authResult.error
+      return authResult.error ?? NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     return handler(req, authResult.user, context)
   }
