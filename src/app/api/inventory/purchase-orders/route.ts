@@ -27,12 +27,27 @@ export async function GET(req: NextRequest) {
     const inventoryId = searchParams.get('inventoryId') || ''
     const status = searchParams.get('status') || ''
     const onlyActive = searchParams.get('onlyActive') || ''
+    const search = (searchParams.get('search') || '').trim()
+    const dateFrom = searchParams.get('dateFrom') || ''
+    const dateTo = searchParams.get('dateTo') || ''
 
     const where: any = {}
     if (type === 'incoming' && inventoryId) where.toInventoryId = inventoryId
     if (type === 'outgoing' && inventoryId) where.fromInventoryId = inventoryId
     if (status) where.status = status as any
     if (onlyActive === 'true') where.isActive = true
+    if (search) {
+      where.OR = [
+        { poNumber: { contains: search, mode: 'insensitive' } },
+        { fromInventory: { name: { contains: search, mode: 'insensitive' } } },
+        { toInventory: { name: { contains: search, mode: 'insensitive' } } },
+      ]
+    }
+    if (dateFrom || dateTo) {
+      where.createdAt = {}
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom + 'T00:00:00.000Z')
+      if (dateTo) where.createdAt.lte = new Date(dateTo + 'T23:59:59.999Z')
+    }
 
     const [pos, total] = await Promise.all([
       prisma.purchaseOrder.findMany({
@@ -40,10 +55,10 @@ export async function GET(req: NextRequest) {
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
-        include: { 
-          poItems: true, 
-          transferOrders: true, 
-          fromInventory: true, 
+        include: {
+          poItems: true,
+          transferOrders: { include: { receiveOrder: true } },
+          fromInventory: true,
           toInventory: true,
           createdBy: { select: { id: true, fullName: true, username: true, email: true } },
         },

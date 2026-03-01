@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react'
 import { DataTable, Column } from '@/components/DataTable'
 import { useInventoryContext } from '@/contexts/InventoryContext'
 import { ReceiveOrderModal } from '@/components/ro/ReceiveOrderModal'
-import { Plus, Package, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react'
+import { TransferOrderModal } from '@/components/to/TransferOrderModal'
+import { Plus, Package, CheckCircle, XCircle, AlertCircle, Search, Calendar } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+
+const DEBOUNCE_MS = 300
 
 export default function ReceiveOrdersPage() {
   const { selectedInventory } = useInventoryContext()
@@ -16,6 +19,11 @@ export default function ReceiveOrdersPage() {
   const [incomingTOsLoading, setIncomingTOsLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [typeFilter, setTypeFilter] = useState<string>('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -24,6 +32,8 @@ export default function ReceiveOrdersPage() {
   const [showCreateManual, setShowCreateManual] = useState(false)
   const [detailRO, setDetailRO] = useState<any | null>(null)
   const [showDetail, setShowDetail] = useState(false)
+  const [detailTO, setDetailTO] = useState<any | null>(null)
+  const [showTODetail, setShowTODetail] = useState(false)
 
   const fetchIncomingTOs = async () => {
     if (!selectedInventory) {
@@ -69,6 +79,10 @@ export default function ReceiveOrdersPage() {
         pageSize: pageSize.toString(),
         inventoryId: selectedInventory.id,
       })
+      if (typeFilter) params.set('type', typeFilter)
+      if (searchQuery) params.set('search', searchQuery)
+      if (dateFrom) params.set('dateFrom', dateFrom)
+      if (dateTo) params.set('dateTo', dateTo)
       const res = await fetch(`/api/inventory/receive-orders?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -94,7 +108,7 @@ export default function ReceiveOrdersPage() {
   useEffect(() => {
     fetchROs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedInventory, page, pageSize])
+  }, [selectedInventory, page, pageSize, typeFilter])
 
   // Auto-hide success message
   useEffect(() => {
@@ -111,6 +125,26 @@ export default function ReceiveOrdersPage() {
     setSuccessMessage('Receive order created successfully!')
     fetchIncomingTOs()
     fetchROs()
+  }
+
+  const openTODetail = async (row: any) => {
+    try {
+      setError(null)
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(`/api/inventory/transfer-orders/${row.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to fetch transfer order details')
+      }
+      const json = await res.json()
+      setDetailTO(json.data)
+      setShowTODetail(true)
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || 'Failed to fetch transfer order details')
+    }
   }
 
   const openDetail = async (row: any) => {
@@ -203,7 +237,7 @@ export default function ReceiveOrdersPage() {
       header: 'From',
       render: (r) => (
         <div className="text-xs text-gray-900">
-          {r.transferOrder?.purchaseOrder?.toInventory?.name || 'N/A'}
+          {r.transferOrder?.purchaseOrder?.toInventory?.name ?? 'N/A'}
         </div>
       ),
     },
@@ -249,6 +283,7 @@ export default function ReceiveOrdersPage() {
             <Package className="w-3.5 h-3.5 text-blue-600" />
             <span className="text-xs font-medium text-blue-700">{ros.length} ROs</span>
           </div>
+          {/* Manual RO creation commented out – restore if needed
           <PermissionGate moduleCode="inventory" featureCode="receive_stock" privilegeCode="create">
             <button
               onClick={() => setShowCreateManual(true)}
@@ -260,6 +295,7 @@ export default function ReceiveOrdersPage() {
               Create Manual RO
             </button>
           </PermissionGate>
+          */}
         </div>
       </div>
 
@@ -312,10 +348,16 @@ export default function ReceiveOrdersPage() {
               data={incomingTOs}
               isLoading={incomingTOsLoading}
               exportable
-              onRowClick={(row) => {
-                setSelectedTO(row)
-                setShowCreateFromTO(true)
-              }}
+              onRowClick={(row) => openTODetail(row)}
+              actions={[
+                {
+                  label: 'Create RO',
+                  onClick: (row) => {
+                    setSelectedTO(row)
+                    setShowCreateFromTO(true)
+                  },
+                },
+              ]}
             />
             {incomingTOs.length === 0 && !incomingTOsLoading && (
               <div className="text-center py-4 text-xs text-gray-500">
@@ -329,8 +371,49 @@ export default function ReceiveOrdersPage() {
       {/* Receive Order History */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200/80 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200/80 bg-gray-50/50">
-          <h3 className="text-xs font-semibold text-gray-900">Receive Order History</h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">All receive orders for this inventory</p>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-xs font-semibold text-gray-900">Receive Order History</h3>
+              <p className="text-[10px] text-gray-500 mt-0.5">All receive orders for this inventory</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => { setSearchInput(e.target.value); setPage(1) }}
+                placeholder="Search RO#, TO#, PO#..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => { setTypeFilter(e.target.value); setPage(1) }}
+              className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">All types</option>
+              <option value="fromTO">From TO</option>
+              <option value="manual">Manual</option>
+            </select>
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
+                className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <span className="text-gray-400 text-xs">–</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
+                className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
         </div>
         <div className="p-3">
           <DataTable
@@ -348,6 +431,17 @@ export default function ReceiveOrdersPage() {
       </div>
 
       {/* Modals */}
+      {showTODetail && detailTO && (
+        <TransferOrderModal
+          mode="detail"
+          to={detailTO}
+          onClose={() => {
+            setShowTODetail(false)
+            setDetailTO(null)
+          }}
+        />
+      )}
+
       {showCreateFromTO && selectedTO && selectedInventory && (
         <ReceiveOrderModal
           mode="createFromTO"
@@ -362,6 +456,7 @@ export default function ReceiveOrdersPage() {
         />
       )}
 
+      {/* Manual RO modal commented out – restore if needed
       {showCreateManual && selectedInventory && (
         <ReceiveOrderModal
           mode="create"
@@ -371,6 +466,7 @@ export default function ReceiveOrdersPage() {
           onError={(err) => setError(err)}
         />
       )}
+      */}
 
       {showDetail && detailRO && (
         <ReceiveOrderModal

@@ -30,7 +30,13 @@ export function TransferOrderModal({
   const [toInventoryId, setToInventoryId] = useState('')
   const [employeeId, setEmployeeId] = useState('')
   const [items, setItems] = useState<
-    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string }> }>
+    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>
+  >([])
+  const [requestedItems, setRequestedItems] = useState<
+    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>
+  >([])
+  const [notRequestedItems, setNotRequestedItems] = useState<
+    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>
   >([])
   const [availableStock, setAvailableStock] = useState<
     Record<string, Array<{ batchId: string; batch: any; quantity: number }>>
@@ -98,14 +104,16 @@ export function TransferOrderModal({
     }
 
     if (mode === 'fromPO' && po) {
-      // Pre-fill items from PO items (will need to fetch batches later)
-      const initialItems =
-        (po.poItems || []).map((it: any) => ({
-          skuId: it.skuId,
-          batches: [],
-        })) || []
-      setItems(initialItems.length > 0 ? initialItems : [{ skuId: '', batches: [] }])
+      const fromPO = (po.poItems || []).map((it: any) => ({
+        skuId: it.skuId,
+        batches: [] as Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }>,
+      }))
+      setRequestedItems(fromPO.length > 0 ? fromPO : [])
+      setNotRequestedItems([])
+      setItems([])
     } else if (mode === 'manual') {
+      setRequestedItems([])
+      setNotRequestedItems([])
       setItems([{ skuId: '', batches: [] }])
     }
 
@@ -117,6 +125,17 @@ export function TransferOrderModal({
 
   // Source (sending) inventory: the one we are working on – only batches here can be sent
   const sourceInventoryId = mode === 'fromPO' ? po?.toInventoryId : fromInventory?.id
+
+  // When fromPO, fetch stock for each requested SKU
+  const requestedSkuIds = requestedItems.map((r) => r.skuId).filter(Boolean).join(',')
+  useEffect(() => {
+    if (mode === 'fromPO' && sourceInventoryId && requestedSkuIds) {
+      requestedItems.forEach((it) => {
+        if (it.skuId) fetchStockForSku(it.skuId)
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, sourceInventoryId, requestedSkuIds])
 
   // Fetch available stock for a SKU in the source inventory (only batches with quantity > 0).
   // Try stock API first (same as Manage Stock page); fallback to available-batches if 403.
@@ -223,6 +242,121 @@ export function TransferOrderModal({
     })
   }
 
+  // fromPO: requested items
+  const addBatchToRequested = (itemIdx: number) => {
+    setRequestedItems((s) => {
+      const updated = [...s]
+      updated[itemIdx] = {
+        ...updated[itemIdx],
+        batches: [...updated[itemIdx].batches, { batchId: '', quantity: 1 }],
+      }
+      return updated
+    })
+  }
+  const removeBatchFromRequested = (itemIdx: number, batchIdx: number) => {
+    setRequestedItems((s) => {
+      const updated = [...s]
+      updated[itemIdx] = {
+        ...updated[itemIdx],
+        batches: updated[itemIdx].batches.filter((_, i) => i !== batchIdx),
+      }
+      return updated
+    })
+  }
+  const updateRequestedBatch = (itemIdx: number, batchIdx: number, key: string, value: any) => {
+    setRequestedItems((s) => {
+      const updated = [...s]
+      updated[itemIdx] = {
+        ...updated[itemIdx],
+        batches: updated[itemIdx].batches.map((b, i) =>
+          i === batchIdx ? { ...b, [key]: value } : b
+        ),
+      }
+      return updated
+    })
+  }
+  const setRequestedBatchUseManual = (itemIdx: number, batchIdx: number, useManual: boolean) => {
+    setRequestedItems((s) => {
+      const updated = [...s]
+      const b = updated[itemIdx].batches[batchIdx]
+      updated[itemIdx] = {
+        ...updated[itemIdx],
+        batches: updated[itemIdx].batches.map((bb, i) =>
+          i === batchIdx ? { ...bb, useManual, batchId: useManual ? '' : bb.batchId, manualBatchCode: useManual ? bb.manualBatchCode : undefined } : bb
+        ),
+      }
+      return updated
+    })
+  }
+
+  // fromPO: not-requested items
+  const addNotRequestedRow = () => {
+    setNotRequestedItems((s) => [...s, { skuId: '', batches: [] }])
+  }
+  const removeNotRequestedRow = (idx: number) => {
+    const item = notRequestedItems[idx]
+    if (item?.skuId) {
+      setAvailableStock((prev) => {
+        const next = { ...prev }
+        delete next[item.skuId]
+        return next
+      })
+    }
+    setNotRequestedItems((s) => s.filter((_, i) => i !== idx))
+  }
+  const updateNotRequestedItem = (idx: number, key: string, value: any) => {
+    setNotRequestedItems((s) => {
+      const updated = s.map((it, i) => (i === idx ? { ...it, [key]: value } : it))
+      if (key === 'skuId' && value) fetchStockForSku(value)
+      return updated
+    })
+  }
+  const addBatchToNotRequested = (itemIdx: number) => {
+    setNotRequestedItems((s) => {
+      const updated = [...s]
+      updated[itemIdx] = {
+        ...updated[itemIdx],
+        batches: [...updated[itemIdx].batches, { batchId: '', quantity: 1 }],
+      }
+      return updated
+    })
+  }
+  const removeBatchFromNotRequested = (itemIdx: number, batchIdx: number) => {
+    setNotRequestedItems((s) => {
+      const updated = [...s]
+      updated[itemIdx] = {
+        ...updated[itemIdx],
+        batches: updated[itemIdx].batches.filter((_, i) => i !== batchIdx),
+      }
+      return updated
+    })
+  }
+  const updateNotRequestedBatch = (itemIdx: number, batchIdx: number, key: string, value: any) => {
+    setNotRequestedItems((s) => {
+      const updated = [...s]
+      updated[itemIdx] = {
+        ...updated[itemIdx],
+        batches: updated[itemIdx].batches.map((b, i) =>
+          i === batchIdx ? { ...b, [key]: value } : b
+        ),
+      }
+      return updated
+    })
+  }
+  const setNotRequestedBatchUseManual = (itemIdx: number, batchIdx: number, useManual: boolean) => {
+    setNotRequestedItems((s) => {
+      const updated = [...s]
+      const b = updated[itemIdx].batches[batchIdx]
+      updated[itemIdx] = {
+        ...updated[itemIdx],
+        batches: updated[itemIdx].batches.map((bb, i) =>
+          i === batchIdx ? { ...bb, useManual, batchId: useManual ? '' : bb.batchId, manualBatchCode: useManual ? bb.manualBatchCode : undefined } : bb
+        ),
+      }
+      return updated
+    })
+  }
+
   // Resolve manual batch code to batch UUID (batch must exist and have stock for this SKU in source inventory)
   const resolveManualBatchCode = (skuId: string, code: string): string | null => {
     const list = availableStock[skuId] || []
@@ -265,20 +399,23 @@ export function TransferOrderModal({
           return
         }
       }
-      if (items.length === 0) {
+      const allItems = mode === 'fromPO'
+        ? [...requestedItems, ...notRequestedItems].filter((it) => it.skuId && it.batches?.length > 0)
+        : items
+      if (allItems.length === 0) {
         onError?.('Please add at least one item')
         return
       }
 
       // Resolve manual batch codes to UUIDs and validate stock
-      const resolvedItems = items.map((it) => {
+      const resolvedItems = allItems.map((it) => {
         if (!it.skuId || !it.batches?.length) return it
         const totalStock = getSkuTotalStock(it.skuId)
         if (totalStock === 0) return it
-        const batches = it.batches.map((b) => {
+        const batches = (it.batches || []).map((b) => {
           let batchId = b.batchId
-          if (!batchId && b.manualBatchCode) {
-            batchId = resolveManualBatchCode(it.skuId, b.manualBatchCode) || ''
+          if (!batchId && (b as any).manualBatchCode) {
+            batchId = resolveManualBatchCode(it.skuId, (b as any).manualBatchCode) || ''
           }
           return { ...b, batchId }
         })
@@ -589,149 +726,229 @@ export function TransferOrderModal({
 
           {/* Items */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-medium text-gray-700">
-                Items <span className="text-red-500">*</span>
-              </label>
-              <button
-                type="button"
-                onClick={addItemRow}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-                Add Item
-              </button>
-            </div>
-            <div className="space-y-3">
-              {items.map((it, idx) => {
-                const stock = availableStock[it.skuId] || []
-                const totalQty = it.batches.reduce((sum, b) => sum + b.quantity, 0)
-                return (
-                  <div key={idx} className="p-3 border border-gray-200 rounded-lg space-y-2 bg-gray-50/50">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={it.skuId}
-                        onChange={(e) => updateItem(idx, 'skuId', e.target.value)}
-                        className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                      >
-                        <option value="">Select SKU</option>
-                        {skus.map((s: any) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} ({s.code})
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => removeItemRow(idx)}
-                        disabled={items.length === 1}
-                        className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={items.length === 1 ? 'At least one item is required' : 'Remove item'}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    {it.skuId && (
-                      <div className="ml-2 space-y-2">
-                        {getSkuTotalStock(it.skuId) === 0 && (
-                          <p className="text-[10px] text-red-600 font-medium">
-                            No stock for this SKU in the source inventory
-                            {sourceInventoryId && (
-                              <span className="font-semibold">
-                                {' '}
-                                ({mode === 'fromPO' ? po?.toInventory?.name : fromInventory?.name || 'From'})
-                              </span>
-                            )}
-                            . Cannot create transfer. Check that this inventory is selected at the top of the page. If you see stock in Manage Stock, use the same inventory in the header dropdown here.
-                          </p>
-                        )}
-                        {it.batches.map((batch, batchIdx) => {
-                          const available = batch.batchId ? getAvailableQty(it.skuId, batch.batchId) : 0
-                          const overQty = batch.quantity > available && batch.batchId
-                          return (
-                            <div key={batchIdx} className="flex flex-wrap items-center gap-2">
-                              <select
-                                value={batch.batchId}
-                                onChange={(e) => {
-                                  updateBatch(idx, batchIdx, 'batchId', e.target.value)
-                                  updateBatch(idx, batchIdx, 'manualBatchCode', undefined)
-                                }}
-                                className="flex-1 min-w-[140px] px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                              >
-                                <option value="">Select Batch</option>
-                                {stock.map((s: any) => {
-                                  const id = s.batch?.id ?? s.batchId
-                                  const code = s.batch?.batchId ?? s.batchId
+            {mode === 'fromPO' ? (
+              <>
+                <label className="block text-xs font-medium text-gray-700 mb-2">Items <span className="text-red-500">*</span></label>
+                {/* Requested in PO */}
+                <div className="mb-4 rounded-lg border-2 border-blue-200 bg-blue-50/30 p-3">
+                  <h4 className="text-xs font-semibold text-blue-900 mb-2">Requested in PO</h4>
+                  {requestedItems.length === 0 ? (
+                    <p className="text-[10px] text-gray-500">No items in this PO.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {requestedItems.map((it, idx) => {
+                        const stock = availableStock[it.skuId] || []
+                        const totalQty = (it.batches || []).reduce((sum, b) => sum + b.quantity, 0)
+                        const requestedQty = po?.poItems?.find((pi: any) => pi.skuId === it.skuId)?.requestedQuantity ?? 0
+                        const remaining = totalQty < requestedQty ? requestedQty - totalQty : null
+                        const exceed = totalQty > requestedQty ? totalQty - requestedQty : null
+                        const skuName = skus.find((s: any) => s.id === it.skuId)
+                        return (
+                          <div key={idx} className="rounded border border-blue-100 bg-white p-2">
+                            <div className="text-[10px] text-gray-600 flex flex-wrap gap-x-3 mb-1">
+                              <span>Requested (PO): <span className="font-medium">{requestedQty}</span></span>
+                              <span>Added: <span className="font-medium">{totalQty}</span></span>
+                              {remaining != null && remaining > 0 && <span className="text-amber-700">Remaining: {remaining}</span>}
+                              {exceed != null && exceed > 0 && <span className="text-green-700">Exceed: {exceed}</span>}
+                            </div>
+                            <div className="grid grid-cols-[1fr_2fr_auto] gap-2 items-start text-xs">
+                              <div className="font-medium text-gray-900">{skuName?.name || skuName?.code || it.skuId}</div>
+                              <div className="space-y-1">
+                                {(it.batches || []).map((batch, batchIdx) => {
+                                  const useManual = (batch as any).useManual
+                                  const batchIdResolved = batch.batchId || ((batch as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (batch as any).manualBatchCode) : null)
+                                  const available = batchIdResolved ? getAvailableQty(it.skuId, batchIdResolved) : 0
+                                  const exceedsAvailable = batchIdResolved && batch.quantity > available
+                                  const stockFiltered = (batch as any).manualBatchCode
+                                    ? stock.filter((s: any) => (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(((batch as any).manualBatchCode || '').toLowerCase()))
+                                    : stock
                                   return (
-                                    <option key={id} value={id}>
-                                      {code} (Available: {s.quantity})
-                                    </option>
+                                    <div key={batchIdx} className="flex flex-wrap items-center gap-2">
+                                      {!useManual ? (
+                                        <>
+                                          <select
+                                            value={batch.batchId}
+                                            onChange={(e) => updateRequestedBatch(idx, batchIdx, 'batchId', e.target.value)}
+                                            className="min-w-[120px] px-2 py-1 border border-gray-200 rounded bg-white text-xs"
+                                          >
+                                            <option value="">Select Batch</option>
+                                            {stock.map((s: any) => (
+                                              <option key={s.batch?.id ?? s.batchId} value={s.batch?.id ?? s.batchId}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</option>
+                                            ))}
+                                          </select>
+                                          <button type="button" onClick={() => setRequestedBatchUseManual(idx, batchIdx, true)} className="text-[10px] text-blue-600 hover:underline">Type instead</button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="relative">
+                                            <input
+                                              type="text"
+                                              value={(batch as any).manualBatchCode ?? ''}
+                                              onChange={(e) => updateRequestedBatch(idx, batchIdx, 'manualBatchCode', e.target.value)}
+                                              placeholder="Batch code"
+                                              className="w-24 px-2 py-1 border rounded bg-white text-xs"
+                                            />
+                                            {stockFiltered.length > 0 && (batch as any).manualBatchCode && (
+                                              <ul className="absolute z-10 mt-0.5 w-40 max-h-32 overflow-auto bg-white border rounded shadow text-[10px]">
+                                                {stockFiltered.slice(0, 8).map((s: any) => (
+                                                  <li key={s.batch?.id ?? s.batchId} className="px-2 py-1 hover:bg-gray-100 cursor-pointer" onMouseDown={() => { updateRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); setRequestedBatchUseManual(idx, batchIdx, false); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
+                                                ))}
+                                              </ul>
+                                            )}
+                                          </div>
+                                          <button type="button" onClick={() => setRequestedBatchUseManual(idx, batchIdx, false)} className="text-[10px] text-blue-600 hover:underline">Use dropdown</button>
+                                        </>
+                                      )}
+                                      <input type="number" min={1} value={batch.quantity} onChange={(e) => updateRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, Number(e.target.value) || 1))} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
+                                      {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
+                                      <button type="button" onClick={() => removeBatchFromRequested(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
+                                    </div>
                                   )
                                 })}
-                              </select>
-                              <span className="text-[10px] text-gray-500 shrink-0">or type Batch ID:</span>
-                              <input
-                                type="text"
-                                value={batch.manualBatchCode ?? ''}
-                                onChange={(e) => updateBatch(idx, batchIdx, 'manualBatchCode', e.target.value)}
-                                onBlur={() => {
-                                  const code = (batch.manualBatchCode || '').trim()
-                                  if (!code) return
-                                  const uuid = resolveManualBatchCode(it.skuId, code)
-                                  if (uuid) {
-                                    updateBatch(idx, batchIdx, 'batchId', uuid)
-                                    updateBatch(idx, batchIdx, 'manualBatchCode', undefined)
-                                  }
-                                }}
-                                placeholder="e.g. B001"
-                                className="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                              />
-                              <input
-                                type="number"
-                                min={1}
-                                value={batch.quantity}
-                                onChange={(e) =>
-                                  updateBatch(idx, batchIdx, 'quantity', Math.max(1, Number(e.target.value) || 1))
-                                }
-                                className="w-24 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                placeholder="Qty"
-                              />
-                              {overQty && (
-                                <span className="text-[10px] text-red-600 w-full">
-                                  Quantity ({batch.quantity}) exceeds available ({available}). Stock would go negative.
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => removeBatchFromItem(idx, batchIdx)}
-                                disabled={it.batches.length === 1}
-                                className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
+                                <button type="button" onClick={() => addBatchToRequested(idx)} disabled={getSkuTotalStock(it.skuId) === 0} className="text-[10px] text-blue-600 hover:underline">+ Add batch</button>
+                              </div>
+                              <div className="text-[10px] text-gray-600">Total: <span className="font-semibold">{totalQty}</span></div>
                             </div>
-                          )
-                        })}
-                        <button
-                          type="button"
-                          onClick={() => addBatchToItem(idx)}
-                          disabled={getSkuTotalStock(it.skuId) === 0}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Plus className="w-3 h-3" />
-                          Add Batch
-                        </button>
-                        {totalQty > 0 && (
-                          <div className="text-[10px] text-gray-600 mt-1">
-                            Total: <span className="font-semibold">{totalQty}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                <button type="button" onClick={addNotRequestedRow} className="mb-3 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200 rounded hover:bg-gray-200">
+                  <Plus className="w-3 h-3" /> Add other SKU (not in PO)
+                </button>
+                {/* Additional SKUs (not in PO) */}
+                {notRequestedItems.length > 0 && (
+                  <div className="mb-4 rounded-lg border-2 border-amber-200 bg-amber-50/30 p-3">
+                    <h4 className="text-xs font-semibold text-amber-900 mb-2">Additional SKUs (not in PO)</h4>
+                    <div className="space-y-3">
+                      {notRequestedItems.map((it, idx) => {
+                        const stock = availableStock[it.skuId] || []
+                        const totalQty = (it.batches || []).reduce((sum, b) => sum + b.quantity, 0)
+                        const poSkuIds = (po?.poItems || []).map((pi: any) => pi.skuId)
+                        const remainingSkus = skus.filter((s: any) => !poSkuIds.includes(s.id) && (s.id === it.skuId || !notRequestedItems.some((n, i) => i !== idx && n.skuId === s.id)))
+                        return (
+                          <div key={idx} className="rounded border border-amber-200 bg-white p-2">
+                            <div className="grid grid-cols-[1fr_2fr_auto] gap-2 items-start text-xs">
+                              <div className="flex items-center gap-1">
+                                <select value={it.skuId} onChange={(e) => updateNotRequestedItem(idx, 'skuId', e.target.value)} className="flex-1 min-w-0 px-2 py-1 border rounded bg-white text-xs">
+                                  <option value="">Select SKU</option>
+                                  {remainingSkus.map((s: any) => (
+                                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                  ))}
+                                </select>
+                                <button type="button" onClick={() => removeNotRequestedRow(idx)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
+                              </div>
+                              <div className="space-y-1">
+                                {it.skuId && (it.batches || []).map((batch, batchIdx) => {
+                                  const useManual = (batch as any).useManual
+                                  const batchIdResolved = batch.batchId || ((batch as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (batch as any).manualBatchCode) : null)
+                                  const available = batchIdResolved ? getAvailableQty(it.skuId, batchIdResolved) : 0
+                                  const exceedsAvailable = batchIdResolved && batch.quantity > available
+                                  const stockFiltered = (batch as any).manualBatchCode ? stock.filter((s: any) => (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(((batch as any).manualBatchCode || '').toLowerCase())) : stock
+                                  return (
+                                    <div key={batchIdx} className="flex flex-wrap items-center gap-2">
+                                      {!useManual ? (
+                                        <>
+                                          <select value={batch.batchId} onChange={(e) => updateNotRequestedBatch(idx, batchIdx, 'batchId', e.target.value)} className="min-w-[120px] px-2 py-1 border rounded bg-white text-xs">
+                                            <option value="">Select Batch</option>
+                                            {stock.map((s: any) => (
+                                              <option key={s.batch?.id ?? s.batchId} value={s.batch?.id ?? s.batchId}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</option>
+                                            ))}
+                                          </select>
+                                          <button type="button" onClick={() => setNotRequestedBatchUseManual(idx, batchIdx, true)} className="text-[10px] text-blue-600 hover:underline">Type instead</button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="relative">
+                                            <input type="text" value={(batch as any).manualBatchCode ?? ''} onChange={(e) => updateNotRequestedBatch(idx, batchIdx, 'manualBatchCode', e.target.value)} placeholder="Batch code" className="w-24 px-2 py-1 border rounded bg-white text-xs" />
+                                            {stockFiltered.length > 0 && (batch as any).manualBatchCode && (
+                                              <ul className="absolute z-10 mt-0.5 w-40 max-h-32 overflow-auto bg-white border rounded shadow text-[10px]">
+                                                {stockFiltered.slice(0, 8).map((s: any) => (
+                                                  <li key={s.batch?.id ?? s.batchId} className="px-2 py-1 hover:bg-gray-100 cursor-pointer" onMouseDown={() => { updateNotRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateNotRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); setNotRequestedBatchUseManual(idx, batchIdx, false); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
+                                                ))}
+                                              </ul>
+                                            )}
+                                          </div>
+                                          <button type="button" onClick={() => setNotRequestedBatchUseManual(idx, batchIdx, false)} className="text-[10px] text-blue-600 hover:underline">Use dropdown</button>
+                                        </>
+                                      )}
+                                      <input type="number" min={1} value={batch.quantity} onChange={(e) => updateNotRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, Number(e.target.value) || 1))} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
+                                      {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
+                                      <button type="button" onClick={() => removeBatchFromNotRequested(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
+                                    </div>
+                                  )
+                                })}
+                                {it.skuId && <button type="button" onClick={() => addBatchToNotRequested(idx)} disabled={getSkuTotalStock(it.skuId) === 0} className="text-[10px] text-blue-600 hover:underline">+ Add batch</button>}
+                              </div>
+                              <div className="text-[10px] text-gray-600">Total: <span className="font-semibold">{totalQty}</span></div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* Grand total */}
+                {(() => {
+                  const reqTotal = requestedItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + b.quantity, 0), 0)
+                  const notTotal = notRequestedItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + b.quantity, 0), 0)
+                  return (
+                    <div className="pt-2 border-t border-gray-200 text-xs font-medium">
+                      Total (all items): <span className="font-semibold">{reqTotal + notTotal}</span>
+                    </div>
+                  )
+                })()}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-medium text-gray-700">Items <span className="text-red-500">*</span></label>
+                  <button type="button" onClick={addItemRow} className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded">
+                    <Plus className="w-3 h-3" /> Add Item
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {items.map((it, idx) => {
+                    const stock = availableStock[it.skuId] || []
+                    const totalQty = it.batches.reduce((sum, b) => sum + b.quantity, 0)
+                    return (
+                      <div key={idx} className="p-3 border border-gray-200 rounded-lg space-y-2 bg-gray-50/50">
+                        <div className="flex items-center gap-2">
+                          <select value={it.skuId} onChange={(e) => updateItem(idx, 'skuId', e.target.value)} className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
+                            <option value="">Select SKU</option>
+                            {skus.map((s: any) => (<option key={s.id} value={s.id}>{s.name} ({s.code})</option>))}
+                          </select>
+                          <button type="button" onClick={() => removeItemRow(idx)} disabled={items.length === 1} className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                        {it.skuId && (
+                          <div className="ml-2 space-y-2">
+                            {getSkuTotalStock(it.skuId) === 0 && <p className="text-[10px] text-red-600">No stock for this SKU in source inventory.</p>}
+                            {it.batches.map((batch, batchIdx) => {
+                              const available = batch.batchId ? getAvailableQty(it.skuId, batch.batchId) : 0
+                              const exceedsAvailable = batch.batchId && batch.quantity > available
+                              return (
+                              <div key={batchIdx} className="flex flex-wrap items-center gap-2">
+                                <select value={batch.batchId} onChange={(e) => { updateBatch(idx, batchIdx, 'batchId', e.target.value); updateBatch(idx, batchIdx, 'manualBatchCode', undefined); }} className="min-w-[140px] px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white">
+                                  <option value="">Select Batch</option>
+                                  {stock.map((s: any) => (<option key={s.batch?.id ?? s.batchId} value={s.batch?.id ?? s.batchId}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</option>))}
+                                </select>
+                                <input type="number" min={1} value={batch.quantity} onChange={(e) => updateBatch(idx, batchIdx, 'quantity', Math.max(1, Number(e.target.value) || 1))} className={`w-24 px-3 py-1.5 text-xs border rounded-lg bg-white ${exceedsAvailable ? 'border-red-500 bg-red-50' : 'border-gray-200'}`} />
+                                {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
+                                <button type="button" onClick={() => removeBatchFromItem(idx, batchIdx)} disabled={it.batches.length === 1} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
+                              </div>
+                            )})}
+                            <button type="button" onClick={() => addBatchToItem(idx)} disabled={getSkuTotalStock(it.skuId) === 0} className="text-[10px] text-blue-600 hover:underline">+ Add batch</button>
+                            {totalQty > 0 && <div className="text-[10px] text-gray-600">Total: <span className="font-semibold">{totalQty}</span></div>}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
         <div className="px-4 py-3 border-t border-gray-200/80 bg-gray-50/50 flex justify-end gap-2">
@@ -747,15 +964,25 @@ export function TransferOrderModal({
             disabled={
               isSubmitting ||
               !employeeId ||
-              items.length === 0 ||
-              items.some((it) => !it.skuId || !it.batches || it.batches.length === 0) ||
-              items.some((it) => it.skuId && getSkuTotalStock(it.skuId) === 0) ||
-              items.some((it) =>
-                it.batches?.some((b) => {
-                  const bid = b.batchId || (b.manualBatchCode ? resolveManualBatchCode(it.skuId, b.manualBatchCode) : null)
-                  return !bid || b.quantity < 1 || (bid && getAvailableQty(it.skuId, bid) < b.quantity)
-                })
-              ) ||
+              (mode === 'fromPO'
+                ? (requestedItems.length === 0 && notRequestedItems.filter((it) => it.skuId && (it.batches?.length || 0) > 0).length === 0) ||
+                  [...requestedItems, ...notRequestedItems].some((it) => !it.skuId || !it.batches || it.batches.length === 0) ||
+                  [...requestedItems, ...notRequestedItems].some((it) => it.skuId && getSkuTotalStock(it.skuId) === 0) ||
+                  [...requestedItems, ...notRequestedItems].some((it) =>
+                    it.batches?.some((b) => {
+                      const bid = b.batchId || ((b as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (b as any).manualBatchCode) : null)
+                      return !bid || b.quantity < 1 || (bid && getAvailableQty(it.skuId, bid) < b.quantity)
+                    })
+                  )
+                : items.length === 0 ||
+                  items.some((it) => !it.skuId || !it.batches || it.batches.length === 0) ||
+                  items.some((it) => it.skuId && getSkuTotalStock(it.skuId) === 0) ||
+                  items.some((it) =>
+                    it.batches?.some((b) => {
+                      const bid = b.batchId || (b.manualBatchCode ? resolveManualBatchCode(it.skuId, b.manualBatchCode) : null)
+                      return !bid || b.quantity < 1 || (bid && getAvailableQty(it.skuId, bid) < b.quantity)
+                    })
+                  )) ||
               (mode === 'manual' && (!fromInventory || !toInventoryId))
             }
             className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

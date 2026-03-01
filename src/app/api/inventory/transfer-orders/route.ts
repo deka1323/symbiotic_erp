@@ -40,14 +40,35 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '10')
     const inventoryId = searchParams.get('inventoryId') || ''
+    const status = searchParams.get('status') || ''
+    const search = (searchParams.get('search') || '').trim()
+    const dateFrom = searchParams.get('dateFrom') || ''
+    const dateTo = searchParams.get('dateTo') || ''
 
     const where: any = {}
     if (inventoryId) {
-      // Show TOs where the related purchase order involves this inventory (either as from or to)
       where.OR = [
         { purchaseOrder: { fromInventoryId: inventoryId } },
         { purchaseOrder: { toInventoryId: inventoryId } },
       ]
+    }
+    if (status === 'CREATED' || status === 'FULFILLED') where.status = status
+    if (search) {
+      where.AND = where.AND || []
+      where.AND.push({
+        OR: [
+          { toNumber: { contains: search, mode: 'insensitive' } },
+          { purchaseOrder: { poNumber: { contains: search, mode: 'insensitive' } } },
+          { receiveOrder: { roNumber: { contains: search, mode: 'insensitive' } } },
+        ],
+      })
+    }
+    if (dateFrom || dateTo) {
+      where.AND = where.AND || []
+      const dateCond: any = {}
+      if (dateFrom) dateCond.gte = new Date(dateFrom + 'T00:00:00.000Z')
+      if (dateTo) dateCond.lte = new Date(dateTo + 'T23:59:59.999Z')
+      where.AND.push({ createdAt: dateCond })
     }
 
     const [tos, total] = await Promise.all([
@@ -75,6 +96,7 @@ export async function GET(req: NextRequest) {
               toInventory: true,
             },
           },
+          receiveOrder: true,
           employee: true,
           createdBy: { select: { id: true, fullName: true, username: true, email: true } },
         },

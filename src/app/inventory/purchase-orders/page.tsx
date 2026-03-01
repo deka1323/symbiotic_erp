@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 import { DataTable, Column } from '@/components/DataTable'
 import { useInventoryContext } from '@/contexts/InventoryContext'
 import { PurchaseOrderModal } from '@/components/po/PurchaseOrderModal'
-import { Plus, Package, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Plus, Package, CheckCircle, XCircle, AlertCircle, Search, Calendar } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+
+const DEBOUNCE_MS = 300
 
 export default function PurchaseOrdersPage() {
   const { selectedInventory } = useInventoryContext()
@@ -16,6 +18,11 @@ export default function PurchaseOrdersPage() {
   const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [type, setType] = useState<'outgoing' | 'incoming'>('outgoing')
+  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -40,6 +47,10 @@ export default function PurchaseOrdersPage() {
         type: type,
         inventoryId: selectedInventory.id,
       })
+      if (statusFilter) params.set('status', statusFilter)
+      if (searchQuery) params.set('search', searchQuery)
+      if (dateFrom) params.set('dateFrom', dateFrom)
+      if (dateTo) params.set('dateTo', dateTo)
       const res = await fetch(`/api/inventory/purchase-orders?${params}`, { 
         headers: { Authorization: `Bearer ${token}` } 
       })
@@ -63,7 +74,13 @@ export default function PurchaseOrdersPage() {
   useEffect(() => {
     fetchPOs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedInventory, page, pageSize, type])
+  }, [selectedInventory, page, pageSize, type, statusFilter, searchQuery, dateFrom, dateTo])
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput), DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   // Auto-hide success message after 3 seconds
   useEffect(() => {
@@ -131,6 +148,24 @@ export default function PurchaseOrdersPage() {
       render: (row) => getStatusBadge(row.status),
     },
     {
+      key: 'toNumber',
+      header: 'TO#',
+      render: (row) => (
+        <div className="text-xs text-gray-900">
+          {row.transferOrders?.[0]?.toNumber ?? 'N/A'}
+        </div>
+      ),
+    },
+    {
+      key: 'roNumber',
+      header: 'RO#',
+      render: (row) => (
+        <div className="text-xs text-gray-900">
+          {row.transferOrders?.[0]?.receiveOrder?.roNumber ?? 'N/A'}
+        </div>
+      ),
+    },
+    {
       key: 'fromInventory',
       header: 'From',
       render: (r) => (
@@ -174,51 +209,92 @@ export default function PurchaseOrdersPage() {
   return (
     <div className="space-y-3 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200/80 px-4 py-3 shadow-sm">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-900">Purchase Orders</h2>
-          <p className="text-[11px] text-gray-500 mt-0.5">
-            {type === 'outgoing' ? 'Outgoing purchase orders' : 'Incoming purchase orders'}
-          </p>
+      <div className="flex flex-col gap-3 bg-white rounded-lg border border-gray-200/80 px-4 py-3 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Purchase Orders</h2>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {type === 'outgoing' ? 'Outgoing purchase orders' : 'Incoming purchase orders'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 rounded-lg border border-blue-100">
+              <Package className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-xs font-medium text-blue-700">{total} POs</span>
+            </div>
+            <div className="inline-flex rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
+              <button
+                onClick={() => { setType('outgoing'); setPage(1) }}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  type === 'outgoing' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Outgoing
+              </button>
+              <button
+                onClick={() => { setType('incoming'); setPage(1) }}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  type === 'incoming' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Incoming
+              </button>
+            </div>
+            <PermissionGate moduleCode="inventory" featureCode="purchase_order" privilegeCode="create">
+              <button
+                onClick={() => setShowCreate(true)}
+                disabled={!selectedInventory}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!selectedInventory ? 'Select an inventory from header dropdown' : 'Create Purchase Order'}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Create PO
+              </button>
+            </PermissionGate>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 rounded-lg border border-blue-100">
-            <Package className="w-3.5 h-3.5 text-blue-600" />
-            <span className="text-xs font-medium text-blue-700">{total} POs</span>
+        {/* Filters bar: search + status + date */}
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); setPage(1) }}
+              placeholder="Search PO#, from, to..."
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
-          <div className="inline-flex rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
-            <button
-              onClick={() => { setType('outgoing'); setPage(1) }}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                type === 'outgoing' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Outgoing
-            </button>
-            <button
-              onClick={() => { setType('incoming'); setPage(1) }}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                type === 'incoming' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Incoming
-            </button>
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+            className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All statuses</option>
+            <option value="CREATED">CREATED</option>
+            <option value="IN_TRANSIT">IN_TRANSIT</option>
+            <option value="FULFILLED">FULFILLED</option>
+          </select>
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
+              className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <span className="text-gray-400 text-xs">–</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
+              className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
           </div>
-          <PermissionGate moduleCode="inventory" featureCode="purchase_order" privilegeCode="create">
-            <button
-              onClick={() => setShowCreate(true)}
-              disabled={!selectedInventory}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-              title={!selectedInventory ? 'Select an inventory from header dropdown' : 'Create Purchase Order'}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Create PO
-            </button>
-          </PermissionGate>
         </div>
       </div>
 

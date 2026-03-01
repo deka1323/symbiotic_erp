@@ -93,16 +93,45 @@ export async function GET(req: NextRequest) {
     // Otherwise, list ROs
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '10')
+    const typeFilter = searchParams.get('type') || '' // 'fromTO' | 'manual'
+    const search = (searchParams.get('search') || '').trim()
+    const dateFrom = searchParams.get('dateFrom') || ''
+    const dateTo = searchParams.get('dateTo') || ''
 
     const where: any = {}
     if (inventoryId) {
-      // ROs where the receiving inventory matches:
-      // - For TO-based ROs: TO's PO.fromInventoryId = inventoryId (receiver)
-      // - For manual ROs: toInventoryId = inventoryId
-      where.OR = [
-        { transferOrder: { purchaseOrder: { fromInventoryId: inventoryId } } },
-        { toInventoryId: inventoryId },
-      ]
+      if (typeFilter === 'fromTO') {
+        where.AND = [
+          { transferOrderId: { not: null } },
+          { transferOrder: { purchaseOrder: { fromInventoryId: inventoryId } } },
+        ]
+      } else if (typeFilter === 'manual') {
+        where.transferOrderId = null
+        where.toInventoryId = inventoryId
+      } else {
+        where.OR = [
+          { transferOrder: { purchaseOrder: { fromInventoryId: inventoryId } } },
+          { toInventoryId: inventoryId },
+        ]
+      }
+    }
+    if (search) {
+      const searchCond = {
+        OR: [
+          { roNumber: { contains: search, mode: 'insensitive' as const } },
+          { transferOrder: { toNumber: { contains: search, mode: 'insensitive' as const } } },
+          { transferOrder: { purchaseOrder: { poNumber: { contains: search, mode: 'insensitive' as const } } } },
+        ],
+      }
+      if (Array.isArray(where.AND)) where.AND.push(searchCond)
+      else where.AND = [searchCond]
+    }
+    if (dateFrom || dateTo) {
+      const dateCond: any = {}
+      if (dateFrom) dateCond.gte = new Date(dateFrom + 'T00:00:00.000Z')
+      if (dateTo) dateCond.lte = new Date(dateTo + 'T23:59:59.999Z')
+      if (Array.isArray(where.AND)) where.AND.push({ createdAt: dateCond })
+      else where.AND = [{ createdAt: dateCond }]
     }
 
     const [ros, total] = await Promise.all([

@@ -1,7 +1,7 @@
 'use client'
 
 import { ReactNode, useState, useMemo, Fragment } from 'react'
-import { ChevronDown, ChevronRight, MoreVertical, ChevronLeft } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 
 export interface Column<T> {
   key: string
@@ -223,7 +223,7 @@ export function DataTable<T extends Record<string, any>>({
                 </th>
               ))}
               {actions.length > 0 && (
-                <th className={`${cellPad} w-12 text-left ${headerTextSize} font-semibold text-gray-700 border-gray-200`}>
+                <th className={`${cellPad} min-w-[140px] w-[140px] text-left ${headerTextSize} font-semibold text-gray-700 border-gray-200`}>
                   Actions
                 </th>
               )}
@@ -277,49 +277,32 @@ export function DataTable<T extends Record<string, any>>({
                         </td>
                       ))}
                       {actions.length > 0 && (
-                        <td className={`${cellPad} border-gray-100`} onClick={(e) => e.stopPropagation()}>
-                          <div className="relative">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setActionMenuOpen(actionMenuOpen === rowKey ? null : rowKey)
-                              }}
-                              className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-                            >
-                              <MoreVertical className="w-3.5 h-3.5" />
-                            </button>
-                            {actionMenuOpen === rowKey && (
-                              <div className="absolute right-0 mt-1 w-40 bg-white rounded border border-gray-200 shadow-lg py-1 z-10">
-                                {actions.map((action, actionIdx) => {
-                                  const isDisabled = action.disabled?.(row)
-                                  return (
-                                    <button
-                                      key={actionIdx}
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        if (!isDisabled) {
-                                          action.onClick(row)
-                                          setActionMenuOpen(null)
-                                        }
-                                      }}
-                                      disabled={isDisabled}
-                                      className={`w-full flex items-center gap-2 px-3 py-1.5 ${textSize} ${
-                                        (typeof action.variant === 'function' ? action.variant(row) : action.variant) === 'danger'
-                                          ? 'text-red-600 hover:bg-red-50'
-                                          : (typeof action.variant === 'function' ? action.variant(row) : action.variant) === 'primary'
-                                            ? 'text-blue-600 hover:bg-blue-50'
-                                            : 'text-gray-700 hover:bg-gray-50'
-                                      } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                      {action.icon && (
-                                        <span className="w-3.5 h-3.5">{typeof action.icon === 'function' ? action.icon(row) : action.icon}</span>
-                                      )}
-                                      {typeof action.label === 'function' ? action.label(row) : action.label}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            )}
+                        <td className={`${cellPad} border-gray-100 align-middle`} onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-wrap gap-1">
+                            {actions.map((action, actionIdx) => {
+                              const isDisabled = action.disabled?.(row)
+                              const variant = typeof action.variant === 'function' ? action.variant(row) : action.variant
+                              return (
+                                <button
+                                  key={actionIdx}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (!isDisabled) action.onClick(row)
+                                  }}
+                                  disabled={isDisabled}
+                                  className={`shrink-0 px-2 py-1 rounded border ${textSize} font-medium transition-colors ${
+                                    variant === 'danger'
+                                      ? 'border-red-200 text-red-700 bg-red-50 hover:bg-red-100'
+                                      : variant === 'primary'
+                                        ? 'border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100'
+                                        : 'border-gray-200 text-gray-700 bg-gray-50 hover:bg-gray-100'
+                                  } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  {typeof action.label === 'function' ? action.label(row) : action.label}
+                                </button>
+                              )
+                            })}
                           </div>
                         </td>
                       )}
