@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react'
 export function Header() {
   const { user, logout } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -31,6 +32,15 @@ export function Header() {
   }
 
   return (
+    <>
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 bg-white rounded-lg shadow-xl px-8 py-6">
+            <div className="animate-spin rounded-full h-10 w-10 border-3 border-blue-600 border-t-transparent" />
+            <p className="text-sm font-medium text-gray-700">Logging out...</p>
+          </div>
+        </div>
+      )}
     <header className="fixed top-0 left-0 right-0 h-[var(--header-height)] bg-white border-b border-gray-200/80 z-[60] flex items-center justify-between px-4 shadow-sm backdrop-blur-sm">
       {/* Left Side - Branding */}
       <div className="flex items-center gap-3 min-w-[200px]">
@@ -113,5 +123,6 @@ export function Header() {
         </div>
       </div>
     </header>
+    </>
   )
 }

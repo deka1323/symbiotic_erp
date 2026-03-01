@@ -310,8 +310,8 @@ export function ReceiveOrderModal({
       }
       for (const batch of it.batches) {
         const batchId = batch.batchId || ((batch as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (batch as any).manualBatchCode) : null)
-        if (!batchId || batch.quantity < 0) {
-          onError?.('Please provide valid batch and quantity for all batches')
+        if (!batchId || batch.quantity < 1) {
+          onError?.('Please provide valid batch and positive quantity for all batches')
           return
         }
       }
@@ -634,8 +634,11 @@ export function ReceiveOrderModal({
                               <div className="space-y-1">
                                 {(it.batches || []).map((batch, batchIdx) => {
                                   const hasBatchId = !!batch.batchId
+                                  const usedBatchIds = (it.batches || []).filter((_, i) => i !== batchIdx).map((b) => b.batchId).filter(Boolean)
                                   const searchQuery = ((batch as any).manualBatchCode ?? '').trim().toLowerCase()
-                                  const stockFiltered = searchQuery ? stock.filter((s: any) => (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(searchQuery)) : stock
+                                  const stockFiltered = stock
+                                    .filter((s: any) => !usedBatchIds.includes(s.batch?.id ?? s.batchId))
+                                    .filter((s: any) => !searchQuery || (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(searchQuery))
                                   return (
                                     <div key={batchIdx} className="flex flex-wrap items-center gap-2">
                                       {hasBatchId ? (
@@ -646,13 +649,13 @@ export function ReceiveOrderModal({
                                           {stockFiltered.length > 0 && (
                                             <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
                                               {stockFiltered.slice(0, 10).map((s: any) => (
-                                                <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={() => { updateRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
+                                                <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId}</li>
                                               ))}
                                             </ul>
                                           )}
                                         </div>
                                       )}
-                                      <input type="number" min={0} value={batch.quantity} onChange={(e) => updateRequestedBatch(idx, batchIdx, 'quantity', Math.max(0, Number(e.target.value) || 0))} className="w-20 px-2 py-1 border rounded text-xs" />
+                                      <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className="w-20 px-2 py-1 border rounded text-xs" />
                                       <button type="button" onClick={() => removeBatchFromRequested(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
                                     </div>
                                   )
@@ -699,8 +702,11 @@ export function ReceiveOrderModal({
                               <div className="space-y-1">
                                 {it.skuId && (it.batches || []).map((batch, batchIdx) => {
                                   const hasBatchId = !!batch.batchId
+                                  const usedBatchIds = (it.batches || []).filter((_, i) => i !== batchIdx).map((b) => b.batchId).filter(Boolean)
                                   const searchQuery = ((batch as any).manualBatchCode ?? '').trim().toLowerCase()
-                                  const stockFiltered = searchQuery ? stock.filter((s: any) => (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(searchQuery)) : stock
+                                  const stockFiltered = stock
+                                    .filter((s: any) => !usedBatchIds.includes(s.batch?.id ?? s.batchId))
+                                    .filter((s: any) => !searchQuery || (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(searchQuery))
                                   return (
                                     <div key={batchIdx} className="flex flex-wrap items-center gap-2">
                                       {hasBatchId ? (
@@ -711,13 +717,13 @@ export function ReceiveOrderModal({
                                           {stockFiltered.length > 0 && (
                                             <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
                                               {stockFiltered.slice(0, 10).map((s: any) => (
-                                                <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={() => { updateExtraBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateExtraBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
+                                                <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateExtraBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateExtraBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId}</li>
                                               ))}
                                             </ul>
                                           )}
                                         </div>
                                       )}
-                                      <input type="number" min={0} value={batch.quantity} onChange={(e) => updateExtraBatch(idx, batchIdx, 'quantity', Math.max(0, Number(e.target.value) || 0))} className="w-20 px-2 py-1 border rounded text-xs" />
+                                      <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateExtraBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className="w-20 px-2 py-1 border rounded text-xs" />
                                       <button type="button" onClick={() => removeBatchFromExtra(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
                                     </div>
                                   )
@@ -765,7 +771,7 @@ export function ReceiveOrderModal({
                                   <option value="">Select Batch</option>
                                   {stock.map((s: any) => (<option key={s.batch?.id ?? s.batchId} value={s.batch?.id ?? s.batchId}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</option>))}
                                 </select>
-                                <input type="number" min={0} value={batch.quantity} onChange={(e) => updateBatch(idx, batchIdx, 'quantity', Math.max(0, Number(e.target.value) || 0))} className="w-24 px-3 py-1.5 text-xs border rounded-lg bg-white" />
+                                <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className="w-24 px-3 py-1.5 text-xs border rounded-lg bg-white" />
                                 <button type="button" onClick={() => removeBatchFromItem(idx, batchIdx)} disabled={it.batches.length === 1} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
                               </div>
                             ))}
@@ -798,10 +804,10 @@ export function ReceiveOrderModal({
                 ? (requestedItems.length === 0 && extraItems.filter((it) => it.skuId && (it.batches?.length || 0) > 0).length === 0) ||
                   [...requestedItems, ...extraItems].some((it) => !it.skuId || !it.batches || it.batches.length === 0 || it.batches.some((b) => {
                     const bid = b.batchId || ((b as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (b as any).manualBatchCode) : null)
-                    return !bid || b.quantity < 0
+                    return !bid || b.quantity < 1
                   }))
                 : items.length === 0 ||
-                  items.some((it) => !it.skuId || !it.batches || it.batches.length === 0 || it.batches.some((b) => !b.batchId || b.quantity < 0)))
+                  items.some((it) => !it.skuId || !it.batches || it.batches.length === 0 || it.batches.some((b) => !b.batchId || b.quantity < 1)))
             }
             className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >

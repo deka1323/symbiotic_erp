@@ -351,8 +351,9 @@ export function PurchaseOrderModal({
                   <input
                     type="number"
                     min={1}
+                    step={1}
                     value={it.requestedQuantity}
-                    onChange={(e) => updateItem(idx, 'requestedQuantity', Math.max(1, Number(e.target.value) || 1))}
+                    onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateItem(idx, 'requestedQuantity', Math.max(1, isNaN(v) ? 1 : v)); }}
                     className="w-24 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
                     placeholder="Qty"
                   />

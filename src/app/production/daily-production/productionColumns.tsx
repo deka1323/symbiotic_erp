@@ -236,7 +236,7 @@ export default function DailyProductionPage() {
                           <option value="">Select SKU</option>
                           {skus.map((s) => (<option key={s.id} value={s.id}>{s.name} ({s.code})</option>))}
                         </select>
-                        <input type="number" min={1} value={it.quantity} onChange={(e) => updateItem(idx, { quantity: Math.max(1, Number(e.target.value) || 1) })} className="w-24 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white tabular-nums" placeholder="Qty" />
+                        <input type="number" min={1} step={1} value={it.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateItem(idx, { quantity: Math.max(1, isNaN(v) ? 1 : v) }); }} className="w-24 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white tabular-nums" placeholder="Qty" />
                         <button type="button" onClick={() => removeItem(idx)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     ))}

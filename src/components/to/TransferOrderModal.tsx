@@ -45,16 +45,17 @@ export function TransferOrderModal({
   const [creatorName, setCreatorName] = useState<string | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
-  // Close on outside click
+  // Close on outside click (use capture so we run before dropdown item handlers and before any re-render)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      if (modalRef.current && !modalRef.current.contains(target)) {
         onClose()
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('mousedown', handleClickOutside, true)
+    return () => document.removeEventListener('mousedown', handleClickOutside, true)
   }, [onClose])
 
   // Load metadata (inventories, SKUs, employees) and initialize state
@@ -755,51 +756,39 @@ export function TransferOrderModal({
                               <div className="font-medium text-gray-900">{skuName?.name || skuName?.code || it.skuId}</div>
                               <div className="space-y-1">
                                 {(it.batches || []).map((batch, batchIdx) => {
-                                  const useManual = (batch as any).useManual
                                   const batchIdResolved = batch.batchId || ((batch as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (batch as any).manualBatchCode) : null)
                                   const available = batchIdResolved ? getAvailableQty(it.skuId, batchIdResolved) : 0
                                   const exceedsAvailable = batchIdResolved && batch.quantity > available
-                                  const stockFiltered = (batch as any).manualBatchCode
-                                    ? stock.filter((s: any) => (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(((batch as any).manualBatchCode || '').toLowerCase()))
-                                    : stock
+                                  const usedBatchIds = (it.batches || []).filter((_, i) => i !== batchIdx).map((b) => b.batchId).filter(Boolean)
+                                  const searchQuery = ((batch as any).manualBatchCode ?? '').trim().toLowerCase()
+                                  const stockFiltered = stock
+                                    .filter((s: any) => !usedBatchIds.includes(s.batch?.id ?? s.batchId))
+                                    .filter((s: any) => !searchQuery || (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(searchQuery))
+                                  const displayValue = batch.batchId
+                                    ? (stock.find((s: any) => (s.batch?.id ?? s.batchId) === batch.batchId)?.batch?.batchId ?? batch.batchId)
+                                    : ((batch as any).manualBatchCode ?? '')
                                   return (
                                     <div key={batchIdx} className="flex flex-wrap items-center gap-2">
-                                      {!useManual ? (
-                                        <>
-                                          <select
-                                            value={batch.batchId}
-                                            onChange={(e) => updateRequestedBatch(idx, batchIdx, 'batchId', e.target.value)}
-                                            className="min-w-[120px] px-2 py-1 border border-gray-200 rounded bg-white text-xs"
-                                          >
-                                            <option value="">Select Batch</option>
-                                            {stock.map((s: any) => (
-                                              <option key={s.batch?.id ?? s.batchId} value={s.batch?.id ?? s.batchId}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</option>
+                                      <div className="relative">
+                                        <input
+                                          type="text"
+                                          value={displayValue}
+                                          onChange={(e) => {
+                                            updateRequestedBatch(idx, batchIdx, 'batchId', '')
+                                            updateRequestedBatch(idx, batchIdx, 'manualBatchCode', e.target.value)
+                                          }}
+                                          placeholder="Type or select batch"
+                                          className="w-36 px-2 py-1 border border-gray-200 rounded bg-white text-xs"
+                                        />
+                                        {stockFiltered.length > 0 && !batch.batchId && (
+                                          <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
+                                            {stockFiltered.slice(0, 10).map((s: any) => (
+                                              <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
                                             ))}
-                                          </select>
-                                          <button type="button" onClick={() => setRequestedBatchUseManual(idx, batchIdx, true)} className="text-[10px] text-blue-600 hover:underline">Type instead</button>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <div className="relative">
-                                            <input
-                                              type="text"
-                                              value={(batch as any).manualBatchCode ?? ''}
-                                              onChange={(e) => updateRequestedBatch(idx, batchIdx, 'manualBatchCode', e.target.value)}
-                                              placeholder="Batch code"
-                                              className="w-24 px-2 py-1 border rounded bg-white text-xs"
-                                            />
-                                            {stockFiltered.length > 0 && (batch as any).manualBatchCode && (
-                                              <ul className="absolute z-10 mt-0.5 w-40 max-h-32 overflow-auto bg-white border rounded shadow text-[10px]">
-                                                {stockFiltered.slice(0, 8).map((s: any) => (
-                                                  <li key={s.batch?.id ?? s.batchId} className="px-2 py-1 hover:bg-gray-100 cursor-pointer" onMouseDown={() => { updateRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); setRequestedBatchUseManual(idx, batchIdx, false); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
-                                                ))}
-                                              </ul>
-                                            )}
-                                          </div>
-                                          <button type="button" onClick={() => setRequestedBatchUseManual(idx, batchIdx, false)} className="text-[10px] text-blue-600 hover:underline">Use dropdown</button>
-                                        </>
-                                      )}
-                                      <input type="number" min={1} value={batch.quantity} onChange={(e) => updateRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, Number(e.target.value) || 1))} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
+                                          </ul>
+                                        )}
+                                      </div>
+                                      <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
                                       {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
                                       <button type="button" onClick={() => removeBatchFromRequested(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
                                     </div>
@@ -842,39 +831,39 @@ export function TransferOrderModal({
                               </div>
                               <div className="space-y-1">
                                 {it.skuId && (it.batches || []).map((batch, batchIdx) => {
-                                  const useManual = (batch as any).useManual
                                   const batchIdResolved = batch.batchId || ((batch as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (batch as any).manualBatchCode) : null)
                                   const available = batchIdResolved ? getAvailableQty(it.skuId, batchIdResolved) : 0
                                   const exceedsAvailable = batchIdResolved && batch.quantity > available
-                                  const stockFiltered = (batch as any).manualBatchCode ? stock.filter((s: any) => (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(((batch as any).manualBatchCode || '').toLowerCase())) : stock
+                                  const usedBatchIds = (it.batches || []).filter((_, i) => i !== batchIdx).map((b) => b.batchId).filter(Boolean)
+                                  const searchQuery = ((batch as any).manualBatchCode ?? '').trim().toLowerCase()
+                                  const stockFiltered = stock
+                                    .filter((s: any) => !usedBatchIds.includes(s.batch?.id ?? s.batchId))
+                                    .filter((s: any) => !searchQuery || (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(searchQuery))
+                                  const displayValue = batch.batchId
+                                    ? (stock.find((s: any) => (s.batch?.id ?? s.batchId) === batch.batchId)?.batch?.batchId ?? batch.batchId)
+                                    : ((batch as any).manualBatchCode ?? '')
                                   return (
                                     <div key={batchIdx} className="flex flex-wrap items-center gap-2">
-                                      {!useManual ? (
-                                        <>
-                                          <select value={batch.batchId} onChange={(e) => updateNotRequestedBatch(idx, batchIdx, 'batchId', e.target.value)} className="min-w-[120px] px-2 py-1 border rounded bg-white text-xs">
-                                            <option value="">Select Batch</option>
-                                            {stock.map((s: any) => (
-                                              <option key={s.batch?.id ?? s.batchId} value={s.batch?.id ?? s.batchId}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</option>
+                                      <div className="relative">
+                                        <input
+                                          type="text"
+                                          value={displayValue}
+                                          onChange={(e) => {
+                                            updateNotRequestedBatch(idx, batchIdx, 'batchId', '')
+                                            updateNotRequestedBatch(idx, batchIdx, 'manualBatchCode', e.target.value)
+                                          }}
+                                          placeholder="Type or select batch"
+                                          className="w-36 px-2 py-1 border border-gray-200 rounded bg-white text-xs"
+                                        />
+                                        {stockFiltered.length > 0 && !batch.batchId && (
+                                          <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
+                                            {stockFiltered.slice(0, 10).map((s: any) => (
+                                              <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateNotRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateNotRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
                                             ))}
-                                          </select>
-                                          <button type="button" onClick={() => setNotRequestedBatchUseManual(idx, batchIdx, true)} className="text-[10px] text-blue-600 hover:underline">Type instead</button>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <div className="relative">
-                                            <input type="text" value={(batch as any).manualBatchCode ?? ''} onChange={(e) => updateNotRequestedBatch(idx, batchIdx, 'manualBatchCode', e.target.value)} placeholder="Batch code" className="w-24 px-2 py-1 border rounded bg-white text-xs" />
-                                            {stockFiltered.length > 0 && (batch as any).manualBatchCode && (
-                                              <ul className="absolute z-10 mt-0.5 w-40 max-h-32 overflow-auto bg-white border rounded shadow text-[10px]">
-                                                {stockFiltered.slice(0, 8).map((s: any) => (
-                                                  <li key={s.batch?.id ?? s.batchId} className="px-2 py-1 hover:bg-gray-100 cursor-pointer" onMouseDown={() => { updateNotRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateNotRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); setNotRequestedBatchUseManual(idx, batchIdx, false); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
-                                                ))}
-                                              </ul>
-                                            )}
-                                          </div>
-                                          <button type="button" onClick={() => setNotRequestedBatchUseManual(idx, batchIdx, false)} className="text-[10px] text-blue-600 hover:underline">Use dropdown</button>
-                                        </>
-                                      )}
-                                      <input type="number" min={1} value={batch.quantity} onChange={(e) => updateNotRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, Number(e.target.value) || 1))} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
+                                          </ul>
+                                        )}
+                                      </div>
+                                      <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateNotRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
                                       {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
                                       <button type="button" onClick={() => removeBatchFromNotRequested(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
                                     </div>
@@ -928,13 +917,36 @@ export function TransferOrderModal({
                             {it.batches.map((batch, batchIdx) => {
                               const available = batch.batchId ? getAvailableQty(it.skuId, batch.batchId) : 0
                               const exceedsAvailable = batch.batchId && batch.quantity > available
+                              const usedBatchIds = it.batches.filter((_, i) => i !== batchIdx).map((b) => b.batchId).filter(Boolean)
+                              const searchQuery = ((batch as any).manualBatchCode ?? '').trim().toLowerCase()
+                              const stockFiltered = stock
+                                .filter((s: any) => !usedBatchIds.includes(s.batch?.id ?? s.batchId))
+                                .filter((s: any) => !searchQuery || (s.batch?.batchId || s.batchId || '').toString().toLowerCase().includes(searchQuery))
+                              const displayValue = batch.batchId
+                                ? (stock.find((s: any) => (s.batch?.id ?? s.batchId) === batch.batchId)?.batch?.batchId ?? batch.batchId)
+                                : ((batch as any).manualBatchCode ?? '')
                               return (
                               <div key={batchIdx} className="flex flex-wrap items-center gap-2">
-                                <select value={batch.batchId} onChange={(e) => { updateBatch(idx, batchIdx, 'batchId', e.target.value); updateBatch(idx, batchIdx, 'manualBatchCode', undefined); }} className="min-w-[140px] px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white">
-                                  <option value="">Select Batch</option>
-                                  {stock.map((s: any) => (<option key={s.batch?.id ?? s.batchId} value={s.batch?.id ?? s.batchId}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</option>))}
-                                </select>
-                                <input type="number" min={1} value={batch.quantity} onChange={(e) => updateBatch(idx, batchIdx, 'quantity', Math.max(1, Number(e.target.value) || 1))} className={`w-24 px-3 py-1.5 text-xs border rounded-lg bg-white ${exceedsAvailable ? 'border-red-500 bg-red-50' : 'border-gray-200'}`} />
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    value={displayValue}
+                                    onChange={(e) => {
+                                      updateBatch(idx, batchIdx, 'batchId', '')
+                                      updateBatch(idx, batchIdx, 'manualBatchCode', e.target.value)
+                                    }}
+                                    placeholder="Type or select batch"
+                                    className="min-w-[140px] w-36 px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                                  />
+                                  {stockFiltered.length > 0 && !batch.batchId && (
+                                    <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded-lg shadow text-xs">
+                                      {stockFiltered.slice(0, 10).map((s: any) => (
+                                        <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateBatch(idx, batchIdx, 'manualBatchCode', undefined); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                                <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className={`w-24 px-3 py-1.5 text-xs border rounded-lg bg-white ${exceedsAvailable ? 'border-red-500 bg-red-50' : 'border-gray-200'}`} />
                                 {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
                                 <button type="button" onClick={() => removeBatchFromItem(idx, batchIdx)} disabled={it.batches.length === 1} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
                               </div>

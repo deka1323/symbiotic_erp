@@ -52,9 +52,7 @@ export function useAuth() {
 
   const handleLogout = async () => {
     console.log('[useAuth] Logging out - clearing credentials')
-    dispatch(logout())
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('user')
+    await dispatch(logout())
     window.location.href = '/login'
   }
 
