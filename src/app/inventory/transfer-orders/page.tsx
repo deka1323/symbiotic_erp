@@ -6,6 +6,8 @@ import { useInventoryContext } from '@/contexts/InventoryContext'
 import { TransferOrderModal } from '@/components/to/TransferOrderModal'
 import { PurchaseOrderModal } from '@/components/po/PurchaseOrderModal'
 import { PermissionGate } from '@/components/PermissionGate'
+import { authFetch } from '@/lib/fetch'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { Plus, AlertCircle, Clock, Search, Calendar } from 'lucide-react'
 
 const DEBOUNCE_MS = 300
@@ -80,7 +82,6 @@ export default function TransferOrdersPage() {
     }
     try {
       setIsLoadingTOs(true)
-      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({
         page: toPage.toString(),
         pageSize: toPageSize.toString(),
@@ -90,9 +91,7 @@ export default function TransferOrdersPage() {
       if (toSearchQuery) params.set('search', toSearchQuery)
       if (toDateFrom) params.set('dateFrom', toDateFrom)
       if (toDateTo) params.set('dateTo', toDateTo)
-      const res = await fetch(`/api/inventory/transfer-orders?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/api/inventory/transfer-orders?${params}`)
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
         throw new Error(j.error || 'Failed to fetch transfer orders')
@@ -168,10 +167,7 @@ export default function TransferOrdersPage() {
 
   const openDetail = async (row: any) => {
     try {
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/inventory/transfer-orders/${row.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/api/inventory/transfer-orders/${row.id}`)
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
         throw new Error(j.error || 'Failed to fetch transfer order details')
@@ -383,15 +379,16 @@ export default function TransferOrdersPage() {
                 className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <select
+            <SearchableSelect
               value={toStatusFilter}
-              onChange={(e) => { setToStatusFilter(e.target.value); setToPage(1) }}
-              className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">All statuses</option>
-              <option value="CREATED">CREATED</option>
-              <option value="FULFILLED">FULFILLED</option>
-            </select>
+              onChange={(v) => { setToStatusFilter(v); setToPage(1) }}
+              placeholder="All statuses"
+              options={[
+                { value: 'CREATED', label: 'CREATED' },
+                { value: 'FULFILLED', label: 'FULFILLED' },
+              ]}
+              className="min-w-[120px]"
+            />
             <div className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-gray-400" />
               <input

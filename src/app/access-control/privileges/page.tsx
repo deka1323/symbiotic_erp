@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/fetch'
 import { DataTable, Column } from '@/components/DataTable'
 import { ShieldCheck } from 'lucide-react'
 
@@ -21,12 +22,7 @@ export default function PrivilegesPage() {
   const fetchPrivileges = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch('/api/acl/privileges', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch('/api/acl/privileges')
 
       if (!response.ok) {
         throw new Error('Failed to fetch privileges')

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import argon2 from 'argon2'
-import { generateAccessToken, generateRefreshToken, generateSessionId } from '@/lib/auth/jwt'
+import { generateAccessToken, generateRefreshToken, generateSessionId, SESSION_TTL_SECONDS } from '@/lib/auth/jwt'
 import { storeRefreshToken } from '@/lib/auth/redis-tokens'
 import { cookies } from 'next/headers'
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     // Generate session
     const sessionId = generateSessionId()
     const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 7) // 7 days
+    expiresAt.setTime(expiresAt.getTime() + SESSION_TTL_SECONDS * 1000) // 6 hours
 
     // Create session in DB
     await prisma.userSession.create({
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: SESSION_TTL_SECONDS, // 6 hours
       path: '/',
     })
 

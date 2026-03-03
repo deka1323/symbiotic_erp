@@ -4,6 +4,10 @@ import { useEffect, useState, useRef } from 'react'
 import { Column, DataTable } from '@/components/DataTable'
 import { useInventoryContext } from '@/contexts/InventoryContext'
 import { Plus, Package, X, Trash2, CheckCircle, AlertCircle } from 'lucide-react'
+import { authFetch } from '@/lib/fetch'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
 export interface BatchForColumn {
   id: string
@@ -70,15 +74,16 @@ export function getProductionColumns(): Column<BatchForColumn>[] {
 }
 
 interface SKU { id: string; code: string; name: string }
-type ItemUpdate = Partial<{ skuId: string; quantity: number }>
+type ItemUpdate = Partial<{ skuId: string; quantity: string }>
 
 export default function DailyProductionPage() {
   const { selectedInventory } = useInventoryContext()
   const [skus, setSkus] = useState<SKU[]>([])
-  const [items, setItems] = useState<{ skuId: string; quantity: number }[]>([])
+  const [items, setItems] = useState<{ skuId: string; quantity: string }[]>([])
   const [batches, setBatches] = useState<BatchForColumn[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -87,9 +92,9 @@ export default function DailyProductionPage() {
   const fetchSkus = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const res = await fetch('/api/basic-config/skus', { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch('/api/basic-config/skus?page=1&pageSize=500', { headers: { Authorization: `Bearer ${token}` } })
       const data = await res.json()
-      setSkus(data.data || [])
+      setSkus((data.data || []).filter((s: any) => s.isActive !== false))
     } catch (err) {
       console.error(err)
       setSkus([])
@@ -100,8 +105,7 @@ export default function DailyProductionPage() {
     if (!selectedInventory) { setBatches([]); setIsLoading(false); return }
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/production/batches?inventoryId=${selectedInventory.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await authFetch(`/api/production/batches?inventoryId=${selectedInventory.id}`)
       const data = await res.json()
       setBatches(data.data || [])
     } catch (err) {
@@ -133,7 +137,7 @@ export default function DailyProductionPage() {
     }
   }, [showAddModal])
 
-  const addItem = () => { setItems([...items, { skuId: skus[0]?.id || '', quantity: 1 }]) }
+  const addItem = () => { setItems([...items, { skuId: '', quantity: '' }]) }
   const updateItem = (idx: number, v: ItemUpdate) => {
     const arr = [...items]
     arr[idx] = { ...arr[idx], ...v }
@@ -141,17 +145,34 @@ export default function DailyProductionPage() {
   }
   const removeItem = (idx: number) => { setItems(items.filter((_, i) => i !== idx)) }
 
-  const createBatch = async () => {
+  const requestCreateBatch = () => {
     setErrorMessage(null)
     if (!selectedInventory) { setErrorMessage('Please select an inventory from the header dropdown.'); return }
     if (items.length === 0) { setErrorMessage('Please add at least one item.'); return }
+    for (const it of items) {
+      const q = parsePositiveInteger(it.quantity)
+      if (q === null || q < 1) {
+        setErrorMessage('Amount can not be zero.')
+        return
+      }
+    }
+    setShowConfirm(true)
+  }
+
+  const createBatch = async () => {
+    if (!selectedInventory) return
+    const parsed = items.map((it) => ({ skuId: it.skuId, quantity: parsePositiveInteger(it.quantity) ?? 0 }))
+    if (parsed.some((p) => p.quantity < 1)) {
+      setErrorMessage('Amount can not be zero.')
+      return
+    }
     try {
       setIsSubmitting(true)
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch('/api/production/batches', {
+      setShowConfirm(false)
+      const res = await authFetch('/api/production/batches', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ inventoryId: selectedInventory.id, items }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventoryId: selectedInventory.id, items: parsed }),
       })
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
@@ -168,7 +189,7 @@ export default function DailyProductionPage() {
     }
   }
 
-  const openAddModal = () => { setItems([]); setErrorMessage(null); setShowAddModal(true) }
+  const openAddModal = () => { setItems([]); setErrorMessage(null); setShowConfirm(false); setShowAddModal(true) }
   const columns = getProductionColumns()
 
   return (
@@ -204,7 +225,7 @@ export default function DailyProductionPage() {
       </div>
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div ref={modalRef} className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-fade-in">
+          <div ref={modalRef} className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-fade-in">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50/80 to-white">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white"><Package className="w-5 h-5" /></div>
@@ -232,11 +253,15 @@ export default function DailyProductionPage() {
                   <div className="space-y-2">
                     {items.map((it, idx) => (
                       <div key={idx} className="flex flex-wrap items-center gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/50">
-                        <select value={it.skuId} onChange={(e) => updateItem(idx, { skuId: e.target.value })} className="flex-1 min-w-[140px] px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
-                          <option value="">Select SKU</option>
-                          {skus.map((s) => (<option key={s.id} value={s.id}>{s.name} ({s.code})</option>))}
-                        </select>
-                        <input type="number" min={1} step={1} value={it.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateItem(idx, { quantity: Math.max(1, isNaN(v) ? 1 : v) }); }} className="w-24 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white tabular-nums" placeholder="Qty" />
+                        <SearchableSelect
+                          value={it.skuId}
+                          onChange={(v) => updateItem(idx, { skuId: v })}
+                          placeholder="Select SKU"
+                          options={skus.map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                          menuPortal
+                          className="flex-1 min-w-[200px]"
+                        />
+                        <PositiveIntegerInput value={it.quantity} onChange={(v) => updateItem(idx, { quantity: v })} className="w-24 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white tabular-nums" placeholder="Qty" />
                         <button type="button" onClick={() => removeItem(idx)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     ))}
@@ -246,13 +271,33 @@ export default function DailyProductionPage() {
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-200 bg-gray-50/50">
               <button type="button" onClick={() => setShowAddModal(false)} className="px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
-              <button type="button" onClick={createBatch} disabled={isSubmitting || items.length === 0} className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <button type="button" onClick={requestCreateBatch} disabled={isSubmitting || items.length === 0 || items.some((it) => !it.skuId || parsePositiveInteger(it.quantity) == null)} className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 {isSubmitting ? (<><span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Creating...</>) : (<><CheckCircle className="w-3.5 h-3.5" /> Create batch & add stock</>)}
               </button>
             </div>
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={showConfirm}
+        title="Confirm add production stock"
+        onConfirm={createBatch}
+        onCancel={() => setShowConfirm(false)}
+        confirmLabel="Create batch & add stock"
+        loading={isSubmitting}
+      >
+        <div className="text-xs text-gray-700 space-y-1">
+          <p><strong>Inventory:</strong> {selectedInventory?.name}</p>
+          <p className="mt-2"><strong>Items:</strong></p>
+          <ul className="list-disc list-inside ml-1">
+            {items.map((it, i) => {
+              const sku = skus.find((s) => s.id === it.skuId)
+              const q = parsePositiveInteger(it.quantity)
+              return <li key={i}>{sku?.name || sku?.code || it.skuId || '—'}: {q ?? 0}</li>
+            })}
+          </ul>
+        </div>
+      </ConfirmDialog>
     </div>
   )
 }

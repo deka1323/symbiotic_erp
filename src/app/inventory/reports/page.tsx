@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { DataTable, Column } from '@/components/DataTable'
+import { authFetch } from '@/lib/fetch'
 
 export default function InventoryReportsPage() {
   const [data, setData] = useState<any[]>([])
@@ -11,8 +12,7 @@ export default function InventoryReportsPage() {
   const fetchReport = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/inventory/reports?type=${type}`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await authFetch(`/api/inventory/reports?type=${type}`)
       const json = await res.json()
       setData(json.data || [])
     } catch (err) {

@@ -10,8 +10,10 @@ export interface JWTPayload {
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key-change-in-production'
 
-export const ACCESS_TOKEN_EXPIRY = '15m' // 15 minutes
-export const REFRESH_TOKEN_EXPIRY = '7d' // 7 days
+export const ACCESS_TOKEN_EXPIRY = '6h' // 6 hours
+export const REFRESH_TOKEN_EXPIRY = '6h' // 6 hours
+/** Session TTL in seconds (6 hours) - use for DB session, Redis TTL, cookie maxAge */
+export const SESSION_TTL_SECONDS = 6 * 60 * 60
 
 /**
  * Generate a unique session ID

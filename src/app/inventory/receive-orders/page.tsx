@@ -7,6 +7,8 @@ import { ReceiveOrderModal } from '@/components/ro/ReceiveOrderModal'
 import { TransferOrderModal } from '@/components/to/TransferOrderModal'
 import { Plus, Package, CheckCircle, XCircle, AlertCircle, Search, Calendar } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+import { authFetch } from '@/lib/fetch'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
 const DEBOUNCE_MS = 300
 
@@ -42,14 +44,11 @@ export default function ReceiveOrdersPage() {
     }
     try {
       setIncomingTOsLoading(true)
-      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({
         listType: 'incomingTOs',
         inventoryId: selectedInventory.id,
       })
-      const res = await fetch(`/api/inventory/receive-orders?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/api/inventory/receive-orders?${params}`)
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to fetch incoming transfer orders')
@@ -73,7 +72,6 @@ export default function ReceiveOrdersPage() {
     try {
       setIsLoading(true)
       setError(null)
-      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString(),
@@ -83,9 +81,7 @@ export default function ReceiveOrdersPage() {
       if (searchQuery) params.set('search', searchQuery)
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
-      const res = await fetch(`/api/inventory/receive-orders?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/api/inventory/receive-orders?${params}`)
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to fetch receive orders')
@@ -151,10 +147,7 @@ export default function ReceiveOrdersPage() {
     try {
       setIsLoading(true)
       setError(null)
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/inventory/receive-orders/${row.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/api/inventory/receive-orders/${row.id}`)
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to fetch receive order details')
@@ -388,15 +381,16 @@ export default function ReceiveOrdersPage() {
                 className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <select
+            <SearchableSelect
               value={typeFilter}
-              onChange={(e) => { setTypeFilter(e.target.value); setPage(1) }}
-              className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">All types</option>
-              <option value="fromTO">From TO</option>
-              <option value="manual">Manual</option>
-            </select>
+              onChange={(v) => { setTypeFilter(v); setPage(1) }}
+              placeholder="All types"
+              options={[
+                { value: 'fromTO', label: 'From TO' },
+                { value: 'manual', label: 'Manual' },
+              ]}
+              className="min-w-[120px]"
+            />
             <div className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-gray-400" />
               <input

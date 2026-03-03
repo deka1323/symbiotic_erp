@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { authFetch } from '@/lib/fetch'
 
 interface Inventory {
   id: string
@@ -57,12 +58,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(`/api/acl/users/${user.id}/inventories`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch(`/api/acl/users/${user.id}/inventories`)
 
       if (response.ok) {
         const data = await response.json()

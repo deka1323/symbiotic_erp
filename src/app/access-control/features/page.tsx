@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DataTable, Column } from '@/components/DataTable'
 import { Zap } from 'lucide-react'
+import { authFetch } from '@/lib/fetch'
 
 interface Feature {
   id: string
@@ -30,12 +31,7 @@ export default function FeaturesPage() {
   const fetchFeatures = async (page = 1, pageSize = 200) => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(`/api/acl/features?page=${page}&pageSize=${pageSize}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch(`/api/acl/features?page=${page}&pageSize=${pageSize}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch features')

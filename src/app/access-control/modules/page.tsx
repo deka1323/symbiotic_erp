@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DataTable, Column } from '@/components/DataTable'
 import { Lock } from 'lucide-react'
+import { authFetch } from '@/lib/fetch'
 
 interface Module {
   id: string
@@ -27,12 +28,7 @@ export default function ModulesPage() {
   const fetchModules = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch('/api/acl/modules', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch('/api/acl/modules')
 
       if (!response.ok) {
         throw new Error('Failed to fetch modules')

@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { X, Plus, Trash2, Package, User, Calendar, MapPin, ArrowRight, FileText } from 'lucide-react'
+import { authFetch } from '@/lib/fetch'
+import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
 export function ReceiveOrderModal({
   mode,
@@ -23,13 +27,14 @@ export function ReceiveOrderModal({
   const [inventories, setInventories] = useState<any[]>([])
   const [skus, setSkus] = useState<any[]>([])
   const [fromInventoryId, setFromInventoryId] = useState('')
-  const [items, setItems] = useState<Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>>([
+  const [items, setItems] = useState<Array<{ skuId: string; batches: Array<{ batchId: string; quantity: string; manualBatchCode?: string; useManual?: boolean }> }>>([
     { skuId: '', batches: [] },
   ])
-  const [requestedItems, setRequestedItems] = useState<Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>>([])
-  const [extraItems, setExtraItems] = useState<Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>>([])
+  const [requestedItems, setRequestedItems] = useState<Array<{ skuId: string; batches: Array<{ batchId: string; quantity: string; manualBatchCode?: string; useManual?: boolean }> }>>([])
+  const [extraItems, setExtraItems] = useState<Array<{ skuId: string; batches: Array<{ batchId: string; quantity: string; manualBatchCode?: string; useManual?: boolean }> }>>([])
   const [availableStock, setAvailableStock] = useState<Record<string, Array<{ batchId: string; batch: any; quantity: number }>>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [creatorName, setCreatorName] = useState<string | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
@@ -48,18 +53,13 @@ export function ReceiveOrderModal({
     // Fetch inventories and SKUs for create modes
     const fetchMeta = async () => {
       try {
-        const token = localStorage.getItem('accessToken')
-        const invRes = await fetch('/api/basic-config/inventories?page=1&pageSize=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const invRes = await authFetch('/api/basic-config/inventories?page=1&pageSize=200')
         if (invRes.ok) {
           const invJson = await invRes.json()
           setInventories((invJson.data || []).filter((i: any) => i.isActive && i.id !== toInventory?.id))
         }
 
-        const skuRes = await fetch('/api/basic-config/skus?page=1&pageSize=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const skuRes = await authFetch('/api/basic-config/skus?page=1&pageSize=200')
         if (skuRes.ok) {
           const skuJson = await skuRes.json()
           setSkus((skuJson.data || []).filter((s: any) => s.isActive))
@@ -78,10 +78,10 @@ export function ReceiveOrderModal({
       const po = to.purchaseOrder
       if (po) setFromInventoryId(po.toInventory?.id || '')
       if (to.toItems && to.toItems.length > 0) {
-        const bySku: Record<string, Array<{ batchId: string; quantity: number }>> = {}
+        const bySku: Record<string, Array<{ batchId: string; quantity: string }>> = {}
         to.toItems.forEach((ti: any) => {
           if (!bySku[ti.skuId]) bySku[ti.skuId] = []
-          bySku[ti.skuId].push({ batchId: ti.batch?.id || ti.batchId || '', quantity: ti.sentQuantity || 0 })
+          bySku[ti.skuId].push({ batchId: ti.batch?.id || ti.batchId || '', quantity: String(ti.sentQuantity ?? '') })
         })
         setRequestedItems(
           Object.entries(bySku).map(([skuId, batches]) => ({ skuId, batches }))
@@ -123,11 +123,8 @@ export function ReceiveOrderModal({
     const inventoryId = mode === 'createFromTO' ? (to?.purchaseOrder?.toInventoryId || '') : (fromInvId || fromInventoryId)
     if (!inventoryId) return
     try {
-      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({ inventoryId, skuId })
-      const res = await fetch(`/api/inventory/stock?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/api/inventory/stock?${params}`)
       if (res.ok) {
         const data = await res.json()
         const stockData = data.data?.[0]
@@ -171,7 +168,7 @@ export function ReceiveOrderModal({
       const updated = [...s]
       updated[itemIdx] = {
         ...updated[itemIdx],
-        batches: [...updated[itemIdx].batches, { batchId: '', quantity: 1 }],
+        batches: [...updated[itemIdx].batches, { batchId: '', quantity: '' }],
       }
       return updated
     })
@@ -213,7 +210,7 @@ export function ReceiveOrderModal({
   const addBatchToRequested = (itemIdx: number) => {
     setRequestedItems((s) => {
       const updated = [...s]
-      updated[itemIdx] = { ...updated[itemIdx], batches: [...(updated[itemIdx].batches || []), { batchId: '', quantity: 1 }] }
+      updated[itemIdx] = { ...updated[itemIdx], batches: [...(updated[itemIdx].batches || []), { batchId: '', quantity: '' }] }
       return updated
     })
   }
@@ -259,7 +256,7 @@ export function ReceiveOrderModal({
   const addBatchToExtra = (itemIdx: number) => {
     setExtraItems((s) => {
       const updated = [...s]
-      updated[itemIdx] = { ...updated[itemIdx], batches: [...(updated[itemIdx].batches || []), { batchId: '', quantity: 1 }] }
+      updated[itemIdx] = { ...updated[itemIdx], batches: [...(updated[itemIdx].batches || []), { batchId: '', quantity: '' }] }
       return updated
     })
   }
@@ -285,7 +282,7 @@ export function ReceiveOrderModal({
     })
   }
 
-  const handleCreate = async () => {
+  const requestCreate = () => {
     if (mode === 'createFromTO' && !to) {
       onError?.('Transfer Order is required')
       return
@@ -310,47 +307,51 @@ export function ReceiveOrderModal({
       }
       for (const batch of it.batches) {
         const batchId = batch.batchId || ((batch as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (batch as any).manualBatchCode) : null)
-        if (!batchId || batch.quantity < 1) {
-          onError?.('Please provide valid batch and positive quantity for all batches')
+        const qty = parsePositiveInteger(batch.quantity)
+        if (!batchId || qty == null || qty < 1) {
+          onError?.('Amount can not be zero.')
           return
         }
       }
     }
+    setShowConfirm(true)
+  }
+
+  const handleCreate = async () => {
+    const allItems = mode === 'createFromTO' ? [...requestedItems, ...extraItems].filter((it) => it.skuId && (it.batches?.length || 0) > 0) : items
+    const resolveItems = (list: typeof allItems) =>
+      list
+        .filter((it) => it.skuId && it.batches && it.batches.length > 0)
+        .map((it) => ({
+          skuId: it.skuId,
+          batches: it.batches.map((b) => {
+            let batchId = b.batchId
+            if (!batchId && (b as any).manualBatchCode) batchId = resolveManualBatchCode(it.skuId, (b as any).manualBatchCode) || ''
+            const qty = parsePositiveInteger(b.quantity) ?? 0
+            return { batchId, quantity: qty }
+          }),
+        }))
+    let payload: any
+    if (mode === 'createFromTO') {
+      payload = { mode: 'fromTO', transferOrderId: to.id, items: resolveItems(allItems) }
+    } else {
+      payload = {
+        mode: 'manual',
+        fromInventoryId,
+        toInventoryId: toInventory.id,
+        items: items.filter((it) => it.skuId && it.batches && it.batches.length > 0).map((it) => ({
+          skuId: it.skuId,
+          batches: it.batches.map((b) => ({ batchId: b.batchId, quantity: parsePositiveInteger(b.quantity) ?? 0 })),
+        })),
+      }
+    }
 
     setIsSubmitting(true)
+    setShowConfirm(false)
     try {
-      const token = localStorage.getItem('accessToken')
-      const resolveItems = (list: typeof allItems) =>
-        list
-          .filter((it) => it.skuId && it.batches && it.batches.length > 0)
-          .map((it) => ({
-            skuId: it.skuId,
-            batches: it.batches.map((b) => {
-              let batchId = b.batchId
-              if (!batchId && (b as any).manualBatchCode) batchId = resolveManualBatchCode(it.skuId, (b as any).manualBatchCode) || ''
-              return { batchId, quantity: b.quantity }
-            }),
-          }))
-      let payload: any
-
-      if (mode === 'createFromTO') {
-        payload = {
-          mode: 'fromTO',
-          transferOrderId: to.id,
-          items: resolveItems(allItems),
-        }
-      } else {
-        payload = {
-          mode: 'manual',
-          fromInventoryId,
-          toInventoryId: toInventory.id,
-          items: items.filter((it) => it.skuId && it.batches && it.batches.length > 0).map((it) => ({ skuId: it.skuId, batches: it.batches.map((b) => ({ batchId: b.batchId, quantity: b.quantity })) })),
-        }
-      }
-
-      const res = await fetch('/api/inventory/receive-orders', {
+      const res = await authFetch('/api/inventory/receive-orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
@@ -579,18 +580,13 @@ export function ReceiveOrderModal({
                   {po.toInventory?.name || '—'}
                 </div>
               ) : (
-                <select
+                <SearchableSelect
                   value={fromInventoryId}
-                  onChange={(e) => setFromInventoryId(e.target.value)}
-                  className="block w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                >
-                  <option value="">Select inventory</option>
-                  {inventories.map((inv: any) => (
-                    <option key={inv.id} value={inv.id}>
-                      {inv.name} ({inv.type})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setFromInventoryId}
+                  placeholder="Select inventory"
+                  options={inventories.map((inv: any) => ({ value: inv.id, label: `${inv.name} (${inv.type})` }))}
+                  className="block w-full"
+                />
               )}
             </div>
             <div>
@@ -616,7 +612,7 @@ export function ReceiveOrderModal({
                     <div className="space-y-3">
                       {requestedItems.map((it, idx) => {
                         const stock = availableStock[it.skuId] || []
-                        const totalQty = (it.batches || []).reduce((sum, b) => sum + b.quantity, 0)
+                        const totalQty = (it.batches || []).reduce((sum, b) => sum + (parsePositiveInteger(b.quantity) ?? 0), 0)
                         const skuFromList = skus.find((s: any) => s.id === it.skuId)
                         const skuFromTO = to?.toItems?.find((ti: any) => ti.skuId === it.skuId)?.sku
                         const skuDisplay = skuFromList ? `${skuFromList.name}${skuFromList.code ? ` (${skuFromList.code})` : ''}` : (skuFromTO ? `${skuFromTO.name}${skuFromTO.code ? ` (${skuFromTO.code})` : ''}` : it.skuId)
@@ -679,7 +675,7 @@ export function ReceiveOrderModal({
                     <div className="space-y-3">
                       {extraItems.map((it, idx) => {
                         const stock = availableStock[it.skuId] || []
-                        const totalQty = (it.batches || []).reduce((sum, b) => sum + b.quantity, 0)
+                        const totalQty = (it.batches || []).reduce((sum, b) => sum + (parsePositiveInteger(b.quantity) ?? 0), 0)
                         const usedSkus = [...requestedItems.map((r) => r.skuId), ...extraItems.filter((_, i) => i !== idx).map((e) => e.skuId)].filter(Boolean)
                         const remainingSkus = skus.filter((s: any) => s.id === it.skuId || !usedSkus.includes(s.id))
                         const getExtraBatchCode = (skuId: string, batchId: string) => {
@@ -691,12 +687,13 @@ export function ReceiveOrderModal({
                           <div key={idx} className="rounded border border-amber-200 bg-white p-2">
                             <div className="grid grid-cols-[1fr_2fr_auto] gap-2 items-start text-xs">
                               <div className="flex items-center gap-1">
-                                <select value={it.skuId} onChange={(e) => updateExtraItem(idx, 'skuId', e.target.value)} className="flex-1 min-w-0 px-2 py-1 border rounded bg-white text-xs">
-                                  <option value="">Select SKU</option>
-                                  {remainingSkus.map((s: any) => (
-                                    <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ''}</option>
-                                  ))}
-                                </select>
+                                <SearchableSelect
+                                  value={it.skuId}
+                                  onChange={(v) => updateExtraItem(idx, 'skuId', v)}
+                                  placeholder="Select SKU"
+                                  options={remainingSkus.map((s: any) => ({ value: s.id, label: `${s.name}${s.code ? ` (${s.code})` : ''}` }))}
+                                  className="flex-1 min-w-0"
+                                />
                                 <button type="button" onClick={() => removeExtraRow(idx)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
                               </div>
                               <div className="space-y-1">
@@ -723,7 +720,7 @@ export function ReceiveOrderModal({
                                           )}
                                         </div>
                                       )}
-                                      <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateExtraBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className="w-20 px-2 py-1 border rounded text-xs" />
+                                      <PositiveIntegerInput value={batch.quantity} onChange={(v) => updateExtraBatch(idx, batchIdx, 'quantity', v)} className="w-20 px-2 py-1 border rounded text-xs" />
                                       <button type="button" onClick={() => removeBatchFromExtra(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
                                     </div>
                                   )
@@ -739,7 +736,7 @@ export function ReceiveOrderModal({
                   </div>
                 )}
                 <div className="pt-2 border-t border-gray-200 text-xs font-medium">
-                  Total (all items): <span className="font-semibold">{requestedItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + b.quantity, 0), 0) + extraItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + b.quantity, 0), 0)}</span>
+                  Total (all items): <span className="font-semibold">{requestedItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + (parsePositiveInteger(b.quantity) ?? 0), 0), 0) + extraItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + (parsePositiveInteger(b.quantity) ?? 0), 0), 0)}</span>
                 </div>
               </>
             ) : (
@@ -753,24 +750,30 @@ export function ReceiveOrderModal({
                 <div className="space-y-3">
                   {items.map((it, idx) => {
                     const stock = availableStock[it.skuId] || []
-                    const totalQty = it.batches.reduce((sum, b) => sum + b.quantity, 0)
+                    const totalQty = it.batches.reduce((sum, b) => sum + (parsePositiveInteger(b.quantity) ?? 0), 0)
                     return (
                       <div key={idx} className="p-3 border border-gray-200 rounded-lg space-y-2 bg-gray-50/50">
                         <div className="flex items-center gap-2">
-                          <select value={it.skuId} onChange={(e) => updateItem(idx, 'skuId', e.target.value)} className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
-                            <option value="">Select SKU</option>
-                            {skus.map((s: any) => (<option key={s.id} value={s.id}>{s.name} ({s.code})</option>))}
-                          </select>
+                          <SearchableSelect
+                            value={it.skuId}
+                            onChange={(v) => updateItem(idx, 'skuId', v)}
+                            placeholder="Select SKU"
+                            options={skus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                            className="flex-1"
+                          />
                           <button type="button" onClick={() => removeItemRow(idx)} disabled={items.length === 1} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                         {it.skuId && (
                           <div className="ml-2 space-y-2">
                             {it.batches.map((batch, batchIdx) => (
                               <div key={batchIdx} className="flex items-center gap-2">
-                                <select value={batch.batchId} onChange={(e) => updateBatch(idx, batchIdx, 'batchId', e.target.value)} className="min-w-[120px] px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white">
-                                  <option value="">Select Batch</option>
-                                  {stock.map((s: any) => (<option key={s.batch?.id ?? s.batchId} value={s.batch?.id ?? s.batchId}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</option>))}
-                                </select>
+                                <SearchableSelect
+                                  value={batch.batchId}
+                                  onChange={(v) => updateBatch(idx, batchIdx, 'batchId', v)}
+                                  placeholder="Select Batch"
+                                  options={stock.map((s: any) => ({ value: s.batch?.id ?? s.batchId, label: `${s.batch?.batchId ?? s.batchId} (Avail: ${s.quantity})` }))}
+                                  className="min-w-[120px]"
+                                />
                                 <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className="w-24 px-3 py-1.5 text-xs border rounded-lg bg-white" />
                                 <button type="button" onClick={() => removeBatchFromItem(idx, batchIdx)} disabled={it.batches.length === 1} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
                               </div>
@@ -796,7 +799,7 @@ export function ReceiveOrderModal({
             Cancel
           </button>
           <button
-            onClick={handleCreate}
+            onClick={requestCreate}
             disabled={
               isSubmitting ||
               (mode === 'create' && !fromInventoryId) ||
@@ -804,10 +807,11 @@ export function ReceiveOrderModal({
                 ? (requestedItems.length === 0 && extraItems.filter((it) => it.skuId && (it.batches?.length || 0) > 0).length === 0) ||
                   [...requestedItems, ...extraItems].some((it) => !it.skuId || !it.batches || it.batches.length === 0 || it.batches.some((b) => {
                     const bid = b.batchId || ((b as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (b as any).manualBatchCode) : null)
-                    return !bid || b.quantity < 1
+                    const q = parsePositiveInteger(b.quantity) ?? 0
+                    return !bid || q < 1
                   }))
                 : items.length === 0 ||
-                  items.some((it) => !it.skuId || !it.batches || it.batches.length === 0 || it.batches.some((b) => !b.batchId || b.quantity < 1)))
+                  items.some((it) => !it.skuId || !it.batches || it.batches.length === 0 || it.batches.some((b) => !b.batchId || (parsePositiveInteger(b.quantity) ?? 0) < 1)))
             }
             className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -815,6 +819,30 @@ export function ReceiveOrderModal({
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={showConfirm}
+        title="Confirm Create Receive Order"
+        onConfirm={handleCreate}
+        onCancel={() => setShowConfirm(false)}
+        confirmLabel="Create RO"
+        loading={isSubmitting}
+      >
+        <div className="text-xs text-gray-700 space-y-1">
+          <p><strong>Mode:</strong> {mode === 'createFromTO' ? 'From TO' : 'Manual'}</p>
+          {mode === 'create' && fromInventoryId && toInventory && (
+            <p><strong>From:</strong> {inventories.find((i: any) => i.id === fromInventoryId)?.name || fromInventoryId} → <strong>To:</strong> {toInventory.name}</p>
+          )}
+          {mode === 'createFromTO' && to && <p><strong>Transfer Order:</strong> {to.toNumber || to.id}</p>}
+          <p className="mt-2"><strong>Items:</strong></p>
+          <ul className="list-disc list-inside ml-1">
+            {(mode === 'createFromTO' ? [...requestedItems, ...extraItems] : items).filter((it) => it.skuId && (it.batches?.length || 0) > 0).map((it, i) => {
+              const sku = skus.find((s: any) => s.id === it.skuId)
+              const total = (it.batches || []).reduce((s: number, b: any) => s + (parsePositiveInteger(b.quantity) ?? 0), 0)
+              return <li key={i}>{sku?.name || sku?.code || it.skuId || '—'}: {total} total across {(it.batches || []).length} batch(es)</li>
+            })}
+          </ul>
+        </div>
+      </ConfirmDialog>
     </div>
   )
 }

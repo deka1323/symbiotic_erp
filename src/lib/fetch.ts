@@ -1,4 +1,90 @@
+import { store } from '@/store/store'
+import { clearCredentials, setCredentials } from '@/store/slices/authSlice'
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api'
+
+/** Clear auth state and redirect to login (session expired or refresh failed). */
+function clearAuthAndRedirect(): void {
+  if (typeof window === 'undefined') return
+  store.dispatch(clearCredentials())
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('user')
+  window.location.href = '/login'
+}
+
+/** Try refresh then retry request; returns retry Response or calls clearAuthAndRedirect(). */
+async function handle401AndRetry(
+  _originalResponse: Response,
+  originalUrl: string,
+  originalConfig: RequestInit
+): Promise<Response> {
+  try {
+    const refreshResponse = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+    if (!refreshResponse.ok) {
+      clearAuthAndRedirect()
+      throw new Error('Session expired')
+    }
+    const refreshData = await refreshResponse.json()
+    const newToken = refreshData.accessToken as string
+    if (typeof window !== 'undefined' && newToken) {
+      localStorage.setItem('accessToken', newToken)
+      const storedUser = localStorage.getItem('user')
+      if (storedUser) {
+        try {
+          store.dispatch(setCredentials({ accessToken: newToken, user: JSON.parse(storedUser) }))
+        } catch {
+          /* keep existing state */
+        }
+      }
+      window.dispatchEvent(new CustomEvent('tokenRefreshed', { detail: { accessToken: newToken } }))
+    }
+    const newHeaders = {
+      ...originalConfig.headers,
+      Authorization: `Bearer ${newToken}`,
+    } as HeadersInit
+    return fetch(originalUrl, { ...originalConfig, headers: newHeaders })
+  } catch (e) {
+    if (String((e as Error).message) === 'Session expired') throw e
+    clearAuthAndRedirect()
+    throw e
+  }
+}
+
+export interface AuthFetchOptions extends RequestInit {
+  token?: string
+}
+
+/**
+ * Auth-aware fetch: adds Bearer token from options.token or localStorage.
+ * On 401, tries refresh once and retries; on refresh failure clears auth and redirects to /login.
+ * Use this for all API calls that require auth so 401 triggers consistent logout.
+ */
+export async function authFetch(
+  url: string,
+  options: AuthFetchOptions = {}
+): Promise<Response> {
+  const { token: tokenOption, ...init } = options
+  const token =
+    tokenOption ??
+    (typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null)
+  const urlFull =
+    url.startsWith('http') ? url : url.startsWith('/') ? url : `${API_URL}${url}`
+  const headers = new Headers(init.headers)
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const config: RequestInit = {
+    ...init,
+    headers,
+    credentials: 'include',
+  }
+  let res = await fetch(urlFull, config)
+  if (res.status === 401 && !urlFull.includes('/auth/refresh')) {
+    res = await handle401AndRetry(res, urlFull, config)
+  }
+  return res
+}
 
 interface FetchOptions extends RequestInit {
   token?: string
@@ -34,10 +120,18 @@ async function handleResponse<T>(
           console.log('[apiFetch] Refresh endpoint returned ok, parsing token')
           const refreshData = await refreshResponse.json()
           if (typeof window !== 'undefined' && refreshData.accessToken) {
-            localStorage.setItem('accessToken', refreshData.accessToken)
-            // Dispatch custom event to update Redux store
+            const newToken = refreshData.accessToken
+            localStorage.setItem('accessToken', newToken)
+            const storedUser = localStorage.getItem('user')
+            if (storedUser) {
+              try {
+                store.dispatch(setCredentials({ accessToken: newToken, user: JSON.parse(storedUser) }))
+              } catch {
+                /* keep existing state */
+              }
+            }
             window.dispatchEvent(
-              new CustomEvent('tokenRefreshed', { detail: { accessToken: refreshData.accessToken } })
+              new CustomEvent('tokenRefreshed', { detail: { accessToken: newToken } })
             )
           }
           // Retry original request with new token
@@ -56,20 +150,11 @@ async function handleResponse<T>(
           return handleResponse<T>(retryResponse, originalUrl, originalConfig)
         } else {
           console.warn('[apiFetch] Refresh endpoint returned non-OK status:', refreshResponse.status)
-          // Refresh failed, redirect to login
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('accessToken')
-            localStorage.removeItem('user')
-            window.location.href = '/login'
-          }
+          clearAuthAndRedirect()
         }
       } catch (error) {
         console.error('[apiFetch] Error while attempting token refresh:', error)
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
-        }
+        clearAuthAndRedirect()
       }
     }
 

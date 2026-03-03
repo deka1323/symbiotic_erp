@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { DataTable, Column } from '@/components/DataTable'
+import { authFetch } from '@/lib/fetch'
 
 interface Inventory {
   id: string
@@ -20,8 +21,7 @@ export function UserInventoryTab({ userId }: { userId: string }) {
   const fetchAssigned = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/acl/users/${userId}/inventories`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await authFetch(`/api/acl/users/${userId}/inventories`)
       if (!res.ok) throw new Error('Failed to fetch assigned inventories')
       const data = await res.json()
       setAssigned(data.data || [])
@@ -35,8 +35,7 @@ export function UserInventoryTab({ userId }: { userId: string }) {
 
   const fetchAll = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/basic-config/inventories`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await authFetch(`/api/basic-config/inventories`)
       if (!res.ok) throw new Error('Failed to fetch inventories')
       const data = await res.json()
       setAllInventories(data.data || [])
@@ -68,10 +67,9 @@ export function UserInventoryTab({ userId }: { userId: string }) {
 
   const handleRemove = async (inventoryId: string) => {
     try {
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/acl/users/${userId}/inventories`, {
+      const res = await authFetch(`/api/acl/users/${userId}/inventories`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inventoryId }),
       })
       if (!res.ok) throw new Error('Failed to remove inventory')

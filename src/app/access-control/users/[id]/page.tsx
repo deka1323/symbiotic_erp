@@ -6,6 +6,7 @@ import { ArrowLeft, UserCircle, Shield, Info } from 'lucide-react'
 import { UserRoleAssignmentTab } from '@/components/access-control/UserRoleAssignmentTab'
 import { UserPermissionManager } from '@/components/access-control/UserPermissionManager'
 import { UserInventoryTab } from '@/components/access-control/UserInventoryTab'
+import { authFetch } from '@/lib/fetch'
 
 interface User {
   id: string
@@ -33,12 +34,7 @@ export default function UserDetailsPage() {
   const fetchUser = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(`/api/acl/users/${userId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch(`/api/acl/users/${userId}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch user')

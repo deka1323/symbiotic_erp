@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { X, Plus, Trash2, Package, User, Calendar, MapPin, ArrowRight } from 'lucide-react'
+import { authFetch } from '@/lib/fetch'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
 type Mode = 'fromPO' | 'manual' | 'detail'
 
@@ -30,14 +34,17 @@ export function TransferOrderModal({
   const [toInventoryId, setToInventoryId] = useState('')
   const [employeeId, setEmployeeId] = useState('')
   const [items, setItems] = useState<
-    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>
+    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: string; manualBatchCode?: string; useManual?: boolean }> }>
   >([])
   const [requestedItems, setRequestedItems] = useState<
-    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>
+    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: string; manualBatchCode?: string; useManual?: boolean }> }>
   >([])
   const [notRequestedItems, setNotRequestedItems] = useState<
-    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: number; manualBatchCode?: string; useManual?: boolean }> }>
+    Array<{ skuId: string; batches: Array<{ batchId: string; quantity: string; manualBatchCode?: string; useManual?: boolean }> }>
   >([])
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [pendingPayloadItems, setPendingPayloadItems] = useState<any[]>([])
+  const pendingSubmitRef = useRef<{ payload: any } | null>(null)
   const [availableStock, setAvailableStock] = useState<
     Record<string, Array<{ batchId: string; batch: any; quantity: number }>>
   >({})
@@ -62,30 +69,22 @@ export function TransferOrderModal({
   useEffect(() => {
     const fetchMeta = async () => {
       try {
-        const token = localStorage.getItem('accessToken')
-
         // Inventories
-        const invRes = await fetch('/api/basic-config/inventories?page=1&pageSize=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const invRes = await authFetch('/api/basic-config/inventories?page=1&pageSize=200')
         if (invRes.ok) {
           const invJson = await invRes.json()
           setInventories((invJson.data || []).filter((i: any) => i.isActive))
         }
 
         // SKUs
-        const skuRes = await fetch('/api/basic-config/skus?page=1&pageSize=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const skuRes = await authFetch('/api/basic-config/skus?page=1&pageSize=200')
         if (skuRes.ok) {
           const skuJson = await skuRes.json()
           setSkus((skuJson.data || []).filter((s: any) => s.isActive))
         }
 
         // Employees
-        const empRes = await fetch('/api/basic-config/employees?page=1&pageSize=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const empRes = await authFetch('/api/basic-config/employees?page=1&pageSize=200')
         if (empRes.ok) {
           const empJson = await empRes.json()
           setEmployees(empJson.data || [])
@@ -213,7 +212,7 @@ export function TransferOrderModal({
       const updated = [...s]
       updated[itemIdx] = {
         ...updated[itemIdx],
-        batches: [...updated[itemIdx].batches, { batchId: '', quantity: 1 }],
+        batches: [...updated[itemIdx].batches, { batchId: '', quantity: '' }],
       }
       return updated
     })
@@ -249,7 +248,7 @@ export function TransferOrderModal({
       const updated = [...s]
       updated[itemIdx] = {
         ...updated[itemIdx],
-        batches: [...updated[itemIdx].batches, { batchId: '', quantity: 1 }],
+        batches: [...updated[itemIdx].batches, { batchId: '', quantity: '' }],
       }
       return updated
     })
@@ -317,7 +316,7 @@ export function TransferOrderModal({
       const updated = [...s]
       updated[itemIdx] = {
         ...updated[itemIdx],
-        batches: [...updated[itemIdx].batches, { batchId: '', quantity: 1 }],
+        batches: [...updated[itemIdx].batches, { batchId: '', quantity: '' }],
       }
       return updated
     })
@@ -436,32 +435,37 @@ export function TransferOrderModal({
           return
         }
         for (const batch of it.batches) {
-          if (!batch.batchId || batch.quantity < 1) {
+          const qty = typeof batch.quantity === 'string' ? (parsePositiveInteger(batch.quantity) ?? 0) : batch.quantity
+          if (!batch.batchId || qty < 1) {
             if (batch.manualBatchCode && !batch.batchId) {
               onError?.(
                 `Batch "${batch.manualBatchCode}" not found or has no stock for this SKU in the source inventory.`
               )
+            } else if (qty < 1) {
+              onError?.('Amount can not be zero.')
             } else {
               onError?.('Please provide valid batch and quantity for all batches')
             }
             return
           }
           const available = getAvailableQty(it.skuId, batch.batchId)
-          if (available < batch.quantity) {
+          if (available < qty) {
             onError?.(
-              `Insufficient stock: requested ${batch.quantity}, only ${available} available for this batch. Transfer would make stock negative.`
+              `Insufficient stock: requested ${qty}, only ${available} available for this batch. Transfer would make stock negative.`
             )
             return
           }
         }
       }
 
-      const token = localStorage.getItem('accessToken')
       const payloadItems = resolvedItems
         .filter((it) => it.skuId && it.batches && it.batches.length > 0)
         .map((it) => ({
           skuId: it.skuId,
-          batches: it.batches.map((b) => ({ batchId: b.batchId, quantity: b.quantity })),
+          batches: it.batches.map((b) => ({
+            batchId: b.batchId,
+            quantity: typeof b.quantity === 'string' ? (parsePositiveInteger(b.quantity) ?? 0) : b.quantity,
+          })),
         }))
 
       const payload: any =
@@ -480,11 +484,28 @@ export function TransferOrderModal({
               items: payloadItems,
             }
 
-      setIsSubmitting(true)
-      const res = await fetch('/api/inventory/transfer-orders', {
+      pendingSubmitRef.current = { payload }
+      setPendingPayloadItems(payloadItems)
+      setShowConfirm(true)
+      return
+    } catch (err: any) {
+      console.error(err)
+      onError?.(err.message || 'Failed to create transfer order')
+    }
+  }
+
+  const doSubmit = async () => {
+    const pending = pendingSubmitRef.current
+    if (!pending) return
+    setIsSubmitting(true)
+    setShowConfirm(false)
+    setPendingPayloadItems([])
+    pendingSubmitRef.current = null
+    try {
+      const res = await authFetch('/api/inventory/transfer-orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pending.payload),
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -492,7 +513,6 @@ export function TransferOrderModal({
       }
       onCreated && onCreated()
     } catch (err: any) {
-      console.error(err)
       onError?.(err.message || 'Failed to create transfer order')
     } finally {
       setIsSubmitting(false)
@@ -686,20 +706,15 @@ export function TransferOrderModal({
                   {po?.fromInventory?.name || '—'}
                 </div>
               ) : (
-                <select
+                <SearchableSelect
                   value={toInventoryId}
-                  onChange={(e) => setToInventoryId(e.target.value)}
-                  className="block w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                >
-                  <option value="">Select inventory</option>
-                  {inventories
+                  onChange={setToInventoryId}
+                  placeholder="Select inventory"
+                  options={inventories
                     .filter((i: any) => i.id !== fromInventory?.id)
-                    .map((inv: any) => (
-                      <option key={inv.id} value={inv.id}>
-                        {inv.name} ({inv.type})
-                      </option>
-                    ))}
-                </select>
+                    .map((inv: any) => ({ value: inv.id, label: `${inv.name} (${inv.type})` }))}
+                  className="block w-full"
+                />
               )}
             </div>
           </div>
@@ -710,18 +725,13 @@ export function TransferOrderModal({
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Assigned Employee <span className="text-red-500">*</span>
               </label>
-              <select
+              <SearchableSelect
                 value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                className="block w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-              >
-                <option value="">Select employee</option>
-                {employees.map((emp: any) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.code})
-                  </option>
-                ))}
-              </select>
+                onChange={setEmployeeId}
+                placeholder="Select employee"
+                options={employees.map((emp: any) => ({ value: emp.id, label: `${emp.name} (${emp.code})` }))}
+                className="block w-full"
+              />
             </div>
           </div>
 
@@ -739,7 +749,7 @@ export function TransferOrderModal({
                     <div className="space-y-3">
                       {requestedItems.map((it, idx) => {
                         const stock = availableStock[it.skuId] || []
-                        const totalQty = (it.batches || []).reduce((sum, b) => sum + b.quantity, 0)
+                        const totalQty = (it.batches || []).reduce((sum, b) => sum + (parsePositiveInteger(b.quantity) ?? 0), 0)
                         const requestedQty = po?.poItems?.find((pi: any) => pi.skuId === it.skuId)?.requestedQuantity ?? 0
                         const remaining = totalQty < requestedQty ? requestedQty - totalQty : null
                         const exceed = totalQty > requestedQty ? totalQty - requestedQty : null
@@ -758,7 +768,8 @@ export function TransferOrderModal({
                                 {(it.batches || []).map((batch, batchIdx) => {
                                   const batchIdResolved = batch.batchId || ((batch as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (batch as any).manualBatchCode) : null)
                                   const available = batchIdResolved ? getAvailableQty(it.skuId, batchIdResolved) : 0
-                                  const exceedsAvailable = batchIdResolved && batch.quantity > available
+                                  const batchQtyNum = parsePositiveInteger(batch.quantity) ?? 0
+                                  const exceedsAvailable = batchIdResolved && batchQtyNum > available
                                   const usedBatchIds = (it.batches || []).filter((_, i) => i !== batchIdx).map((b) => b.batchId).filter(Boolean)
                                   const searchQuery = ((batch as any).manualBatchCode ?? '').trim().toLowerCase()
                                   const stockFiltered = stock
@@ -788,7 +799,7 @@ export function TransferOrderModal({
                                           </ul>
                                         )}
                                       </div>
-                                      <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
+                                      <PositiveIntegerInput value={batch.quantity} onChange={(v) => updateRequestedBatch(idx, batchIdx, 'quantity', v)} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
                                       {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
                                       <button type="button" onClick={() => removeBatchFromRequested(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
                                     </div>
@@ -814,26 +825,28 @@ export function TransferOrderModal({
                     <div className="space-y-3">
                       {notRequestedItems.map((it, idx) => {
                         const stock = availableStock[it.skuId] || []
-                        const totalQty = (it.batches || []).reduce((sum, b) => sum + b.quantity, 0)
+                        const totalQty = (it.batches || []).reduce((sum, b) => sum + (parsePositiveInteger(b.quantity) ?? 0), 0)
                         const poSkuIds = (po?.poItems || []).map((pi: any) => pi.skuId)
                         const remainingSkus = skus.filter((s: any) => !poSkuIds.includes(s.id) && (s.id === it.skuId || !notRequestedItems.some((n, i) => i !== idx && n.skuId === s.id)))
                         return (
                           <div key={idx} className="rounded border border-amber-200 bg-white p-2">
                             <div className="grid grid-cols-[1fr_2fr_auto] gap-2 items-start text-xs">
                               <div className="flex items-center gap-1">
-                                <select value={it.skuId} onChange={(e) => updateNotRequestedItem(idx, 'skuId', e.target.value)} className="flex-1 min-w-0 px-2 py-1 border rounded bg-white text-xs">
-                                  <option value="">Select SKU</option>
-                                  {remainingSkus.map((s: any) => (
-                                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                                  ))}
-                                </select>
+                                <SearchableSelect
+                                  value={it.skuId}
+                                  onChange={(v) => updateNotRequestedItem(idx, 'skuId', v)}
+                                  placeholder="Select SKU"
+                                  options={remainingSkus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                                  className="flex-1 min-w-0"
+                                />
                                 <button type="button" onClick={() => removeNotRequestedRow(idx)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
                               </div>
                               <div className="space-y-1">
                                 {it.skuId && (it.batches || []).map((batch, batchIdx) => {
                                   const batchIdResolved = batch.batchId || ((batch as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (batch as any).manualBatchCode) : null)
                                   const available = batchIdResolved ? getAvailableQty(it.skuId, batchIdResolved) : 0
-                                  const exceedsAvailable = batchIdResolved && batch.quantity > available
+                                  const batchQtyNum = parsePositiveInteger(batch.quantity) ?? 0
+                                  const exceedsAvailable = batchIdResolved && batchQtyNum > available
                                   const usedBatchIds = (it.batches || []).filter((_, i) => i !== batchIdx).map((b) => b.batchId).filter(Boolean)
                                   const searchQuery = ((batch as any).manualBatchCode ?? '').trim().toLowerCase()
                                   const stockFiltered = stock
@@ -863,7 +876,7 @@ export function TransferOrderModal({
                                           </ul>
                                         )}
                                       </div>
-                                      <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateNotRequestedBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
+                                      <PositiveIntegerInput value={batch.quantity} onChange={(v) => updateNotRequestedBatch(idx, batchIdx, 'quantity', v)} className={`w-20 px-2 py-1 border rounded text-xs ${exceedsAvailable ? 'border-red-500 bg-red-50' : ''}`} />
                                       {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
                                       <button type="button" onClick={() => removeBatchFromNotRequested(idx, batchIdx)} disabled={(it.batches || []).length <= 1} className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
                                     </div>
@@ -881,8 +894,8 @@ export function TransferOrderModal({
                 )}
                 {/* Grand total */}
                 {(() => {
-                  const reqTotal = requestedItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + b.quantity, 0), 0)
-                  const notTotal = notRequestedItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + b.quantity, 0), 0)
+                  const reqTotal = requestedItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + (parsePositiveInteger(b.quantity) ?? 0), 0), 0)
+                  const notTotal = notRequestedItems.reduce((s, it) => s + (it.batches || []).reduce((a, b) => a + (parsePositiveInteger(b.quantity) ?? 0), 0), 0)
                   return (
                     <div className="pt-2 border-t border-gray-200 text-xs font-medium">
                       Total (all items): <span className="font-semibold">{reqTotal + notTotal}</span>
@@ -901,14 +914,17 @@ export function TransferOrderModal({
                 <div className="space-y-3">
                   {items.map((it, idx) => {
                     const stock = availableStock[it.skuId] || []
-                    const totalQty = it.batches.reduce((sum, b) => sum + b.quantity, 0)
+                    const totalQty = it.batches.reduce((sum, b) => sum + (parsePositiveInteger(b.quantity) ?? 0), 0)
                     return (
                       <div key={idx} className="p-3 border border-gray-200 rounded-lg space-y-2 bg-gray-50/50">
                         <div className="flex items-center gap-2">
-                          <select value={it.skuId} onChange={(e) => updateItem(idx, 'skuId', e.target.value)} className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
-                            <option value="">Select SKU</option>
-                            {skus.map((s: any) => (<option key={s.id} value={s.id}>{s.name} ({s.code})</option>))}
-                          </select>
+                          <SearchableSelect
+                            value={it.skuId}
+                            onChange={(v) => updateItem(idx, 'skuId', v)}
+                            placeholder="Select SKU"
+                            options={skus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                            className="flex-1"
+                          />
                           <button type="button" onClick={() => removeItemRow(idx)} disabled={items.length === 1} className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                         {it.skuId && (
@@ -916,7 +932,8 @@ export function TransferOrderModal({
                             {getSkuTotalStock(it.skuId) === 0 && <p className="text-[10px] text-red-600">No stock for this SKU in source inventory.</p>}
                             {it.batches.map((batch, batchIdx) => {
                               const available = batch.batchId ? getAvailableQty(it.skuId, batch.batchId) : 0
-                              const exceedsAvailable = batch.batchId && batch.quantity > available
+                              const batchQtyNum = parsePositiveInteger(batch.quantity) ?? 0
+                              const exceedsAvailable = batch.batchId && batchQtyNum > available
                               const usedBatchIds = it.batches.filter((_, i) => i !== batchIdx).map((b) => b.batchId).filter(Boolean)
                               const searchQuery = ((batch as any).manualBatchCode ?? '').trim().toLowerCase()
                               const stockFiltered = stock
@@ -946,7 +963,7 @@ export function TransferOrderModal({
                                     </ul>
                                   )}
                                 </div>
-                                <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className={`w-24 px-3 py-1.5 text-xs border rounded-lg bg-white ${exceedsAvailable ? 'border-red-500 bg-red-50' : 'border-gray-200'}`} />
+                                <PositiveIntegerInput value={batch.quantity} onChange={(v) => updateBatch(idx, batchIdx, 'quantity', v)} className={`w-24 px-3 py-1.5 text-xs border rounded-lg bg-white ${exceedsAvailable ? 'border-red-500 bg-red-50' : 'border-gray-200'}`} />
                                 {exceedsAvailable && <span className="text-[10px] text-red-600">Exceeds available ({available}). TO cannot be created.</span>}
                                 <button type="button" onClick={() => removeBatchFromItem(idx, batchIdx)} disabled={it.batches.length === 1} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
                               </div>
@@ -983,7 +1000,8 @@ export function TransferOrderModal({
                   [...requestedItems, ...notRequestedItems].some((it) =>
                     it.batches?.some((b) => {
                       const bid = b.batchId || ((b as any).manualBatchCode ? resolveManualBatchCode(it.skuId, (b as any).manualBatchCode) : null)
-                      return !bid || b.quantity < 1 || (bid && getAvailableQty(it.skuId, bid) < b.quantity)
+                      const q = parsePositiveInteger(b.quantity) ?? 0
+                      return !bid || q < 1 || (bid && getAvailableQty(it.skuId, bid) < q)
                     })
                   )
                 : items.length === 0 ||
@@ -992,7 +1010,8 @@ export function TransferOrderModal({
                   items.some((it) =>
                     it.batches?.some((b) => {
                       const bid = b.batchId || (b.manualBatchCode ? resolveManualBatchCode(it.skuId, b.manualBatchCode) : null)
-                      return !bid || b.quantity < 1 || (bid && getAvailableQty(it.skuId, bid) < b.quantity)
+                      const q = parsePositiveInteger(b.quantity) ?? 0
+                      return !bid || q < 1 || (bid && getAvailableQty(it.skuId, bid) < q)
                     })
                   )) ||
               (mode === 'manual' && (!fromInventory || !toInventoryId))
@@ -1003,6 +1022,27 @@ export function TransferOrderModal({
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={showConfirm}
+        title="Confirm Create Transfer Order"
+        onConfirm={doSubmit}
+        onCancel={() => { setShowConfirm(false); setPendingPayloadItems([]); pendingSubmitRef.current = null }}
+        confirmLabel="Create TO"
+        loading={isSubmitting}
+      >
+        <div className="text-xs text-gray-700 space-y-1">
+          <p><strong>Mode:</strong> {mode === 'fromPO' ? 'From PO' : 'Manual'}</p>
+          {mode === 'manual' && <p><strong>From:</strong> {fromInventory?.name} → <strong>To:</strong> {inventories.find((i: any) => i.id === toInventoryId)?.name || toInventoryId}</p>}
+          <p className="mt-2"><strong>Items:</strong></p>
+          <ul className="list-disc list-inside ml-1">
+            {pendingPayloadItems.map((it: any, i: number) => {
+              const sku = skus.find((s: any) => s.id === it.skuId)
+              const total = (it.batches || []).reduce((s: number, b: any) => s + (b.quantity || 0), 0)
+              return <li key={i}>{sku?.name || sku?.code || it.skuId || '—'}: {total} total across {(it.batches || []).length} batch(es)</li>
+            })}
+          </ul>
+        </div>
+      </ConfirmDialog>
     </div>
   )
 }

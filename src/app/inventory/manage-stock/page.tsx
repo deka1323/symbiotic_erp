@@ -5,6 +5,10 @@ import { DataTable, Column } from '@/components/DataTable'
 import { useInventoryContext } from '@/contexts/InventoryContext'
 import { Package, X, CheckCircle, XCircle, AlertCircle, Filter, Layers } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+import { authFetch } from '@/lib/fetch'
+import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
 export default function ManageStockPage() {
   const { selectedInventory } = useInventoryContext()
@@ -20,8 +24,9 @@ export default function ManageStockPage() {
   const [historyPageSize, setHistoryPageSize] = useState(10)
   const [historyTotal, setHistoryTotal] = useState(0)
   const [editing, setEditing] = useState<{ inventoryId: string; skuId: string; batchId: string; currentQty: number; skuName: string; batchIdDisplay: string } | null>(null)
-  const [newQty, setNewQty] = useState(0)
+  const [newQtyStr, setNewQtyStr] = useState('')
   const [reason, setReason] = useState('')
+  const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -70,16 +75,13 @@ export default function ManageStockPage() {
     }
     try {
       setHistoryLoading(true)
-      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({
         inventoryId: selectedInventory.id,
         page: historyPage.toString(),
         pageSize: historyPageSize.toString(),
         onlyManageStock: 'true',
       })
-      const res = await fetch(`/api/inventory/stock/history?${params}`, { 
-        headers: { Authorization: `Bearer ${token}` } 
-      })
+      const res = await authFetch(`/api/inventory/stock/history?${params}`)
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to fetch stock history')
@@ -119,7 +121,8 @@ export default function ManageStockPage() {
       if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
         setEditing(null)
         setReason('')
-        setNewQty(0)
+        setNewQtyStr('')
+        setShowConfirm(false)
       }
     }
     if (editing) {
@@ -143,35 +146,47 @@ export default function ManageStockPage() {
       skuName: stockItem.sku?.name || stockItem.sku?.code || skuId,
       batchIdDisplay: batch.batchId,
     })
-    setNewQty(currentQty)
+    setNewQtyStr(String(currentQty))
     setReason('')
     setError(null)
+    setShowConfirm(false)
   }
 
-  const saveEdit = async () => {
+  const requestSaveEdit = () => {
     if (!editing) return
     if (!reason.trim() || reason.trim().length < 3) {
       setError('Reason must be at least 3 characters')
       return
     }
-    if (newQty < 0) {
-      setError('Quantity cannot be negative')
+    const qty = parsePositiveInteger(newQtyStr)
+    if (qty == null || qty < 1) {
+      setError('Amount can not be zero.')
       return
     }
-    
+    setError(null)
+    setShowConfirm(true)
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    const qty = parsePositiveInteger(newQtyStr)
+    if (qty == null || qty < 1) {
+      setError('Amount can not be zero.')
+      return
+    }
     setIsSubmitting(true)
+    setShowConfirm(false)
     setError(null)
     try {
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch('/api/inventory/stock', {
+      const res = await authFetch('/api/inventory/stock', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ 
-          inventoryId: editing.inventoryId, 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inventoryId: editing.inventoryId,
           skuId: editing.skuId,
           batchId: editing.batchId,
-          newQuantity: newQty, 
-          reason: reason.trim() 
+          newQuantity: qty,
+          reason: reason.trim(),
         }),
       })
       if (!res.ok) {
@@ -180,7 +195,7 @@ export default function ManageStockPage() {
       }
       setEditing(null)
       setReason('')
-      setNewQty(0)
+      setNewQtyStr('')
       setSuccessMessage('Stock updated successfully!')
       fetchStocks()
       fetchHistory()
@@ -303,21 +318,13 @@ export default function ManageStockPage() {
           </div>
           <div className="flex items-center gap-2">
             <Filter className="w-3.5 h-3.5 text-gray-500" />
-            <select
+            <SearchableSelect
               value={selectedBatchId || ''}
-              onChange={(e) => {
-                setSelectedBatchId(e.target.value || null)
-                setPage(1)
-              }}
-              className="px-2.5 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-            >
-              <option value="">All Batches</option>
-              {batchIds.map((bid) => (
-                <option key={bid} value={bid}>
-                  {bid}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => { setSelectedBatchId(v || null); setPage(1) }}
+              placeholder="All Batches"
+              options={batchIds.map((bid) => ({ value: bid, label: bid }))}
+              className="min-w-[140px]"
+            />
           </div>
         </div>
       </div>
@@ -431,7 +438,8 @@ export default function ManageStockPage() {
                 onClick={() => {
                   setEditing(null)
                   setReason('')
-                  setNewQty(0)
+                  setNewQtyStr('')
+                  setShowConfirm(false)
                   setError(null)
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
@@ -464,11 +472,9 @@ export default function ManageStockPage() {
                   <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-1">
                     New Quantity <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={newQty}
-                    onChange={(e) => setNewQty(Math.max(0, Number(e.target.value) || 0))}
+                  <PositiveIntegerInput
+                    value={newQtyStr}
+                    onChange={setNewQtyStr}
                     className="block w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
                     placeholder="Enter new quantity"
                   />
@@ -476,16 +482,16 @@ export default function ManageStockPage() {
               </div>
 
               {/* Quantity Change Indicator */}
-              {newQty !== editing.currentQty && (
+              {(parsePositiveInteger(newQtyStr) ?? 0) !== editing.currentQty && (
                 <div className={`px-3 py-2 rounded-lg border text-xs ${
-                  newQty > editing.currentQty
+                  (parsePositiveInteger(newQtyStr) ?? 0) > editing.currentQty
                     ? 'bg-green-50 border-green-200 text-green-700'
                     : 'bg-red-50 border-red-200 text-red-700'
                 }`}>
-                  {newQty > editing.currentQty ? (
-                    <span>+{newQty - editing.currentQty} (Increase)</span>
+                  {(parsePositiveInteger(newQtyStr) ?? 0) > editing.currentQty ? (
+                    <span>+{(parsePositiveInteger(newQtyStr) ?? 0) - editing.currentQty} (Increase)</span>
                   ) : (
-                    <span>{newQty - editing.currentQty} (Decrease)</span>
+                    <span>{(parsePositiveInteger(newQtyStr) ?? 0) - editing.currentQty} (Decrease)</span>
                   )}
                 </div>
               )}
@@ -519,7 +525,8 @@ export default function ManageStockPage() {
                 onClick={() => {
                   setEditing(null)
                   setReason('')
-                  setNewQty(0)
+                  setNewQtyStr('')
+                  setShowConfirm(false)
                   setError(null)
                 }}
                 disabled={isSubmitting}
@@ -528,14 +535,30 @@ export default function ManageStockPage() {
                 Cancel
               </button>
               <button
-                onClick={saveEdit}
-                disabled={isSubmitting || !reason.trim() || reason.trim().length < 3 || newQty < 0}
+                onClick={requestSaveEdit}
+                disabled={isSubmitting || !reason.trim() || reason.trim().length < 3 || (parsePositiveInteger(newQtyStr) ?? 0) < 1}
                 className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
+          <ConfirmDialog
+            open={showConfirm}
+            title="Confirm Stock Edit"
+            onConfirm={saveEdit}
+            onCancel={() => setShowConfirm(false)}
+            confirmLabel="Save Changes"
+            loading={isSubmitting}
+          >
+            <div className="text-xs text-gray-700 space-y-2">
+              <p><strong>SKU:</strong> {editing.skuName}</p>
+              <p><strong>Batch:</strong> {editing.batchIdDisplay}</p>
+              <p><strong>Current quantity:</strong> {editing.currentQty}</p>
+              <p><strong>New quantity:</strong> {parsePositiveInteger(newQtyStr) ?? 0}</p>
+              <p><strong>Reason:</strong> {reason.trim()}</p>
+            </div>
+          </ConfirmDialog>
         </div>
       )}
     </div>

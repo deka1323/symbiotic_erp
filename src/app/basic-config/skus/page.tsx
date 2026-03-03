@@ -2,8 +2,10 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { DataTable, Column, Action } from '@/components/DataTable'
-import { Plus, Search, Package, CheckCircle, XCircle, Edit, Trash2, RotateCcw } from 'lucide-react'
+import { Plus, Search, Package, CheckCircle, XCircle, Edit, Trash2, RotateCcw, Filter } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+import { authFetch } from '@/lib/fetch'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
 interface SKU {
   id: string
@@ -12,6 +14,8 @@ interface SKU {
   description?: string | null
   unit: string
   isActive: boolean
+  categoryId?: string | null
+  category?: { id: string; name: string } | null
 }
 
 export default function SKUsPage() {
@@ -21,13 +25,30 @@ export default function SKUsPage() {
   const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<SKU | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchSkus()
-  }, [page, pageSize, search])
+  }, [page, pageSize, search, categoryFilter])
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await authFetch('/api/basic-config/categories?page=1&pageSize=200')
+        if (res.ok) {
+          const data = await res.json()
+          setCategories((data.data || []).map((c: any) => ({ id: c.id, name: c.name })))
+        }
+      } catch {
+        setCategories([])
+      }
+    }
+    fetchCategories()
+  }, [])
 
   const fetchSkus = async () => {
     try {
@@ -38,6 +59,7 @@ export default function SKUsPage() {
         page: page.toString(),
         pageSize: pageSize.toString(),
         ...(search && { search }),
+        ...(categoryFilter && { categoryId: categoryFilter }),
       })
 
       const res = await fetch(`/api/basic-config/skus?${params}`, {
@@ -63,10 +85,9 @@ export default function SKUsPage() {
   const handleCreate = async (payload: Partial<SKU>) => {
     try {
       setError(null)
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch('/api/basic-config/skus', {
+      const res = await authFetch('/api/basic-config/skus', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
@@ -107,10 +128,9 @@ export default function SKUsPage() {
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
       setError(null)
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/basic-config/skus/${id}`, {
+      const res = await authFetch(`/api/basic-config/skus/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !currentStatus }),
       })
 
@@ -229,8 +249,8 @@ export default function SKUsPage() {
 
       {/* Content Card */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200/80 overflow-hidden">
-        {/* Search */}
-        <div className="p-3 border-b border-gray-200/80 bg-gray-50/50">
+        {/* Search and filters */}
+        <div className="p-3 border-b border-gray-200/80 bg-gray-50/50 space-y-2">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
               <Search className="h-3.5 w-3.5 text-gray-400" />
@@ -246,6 +266,16 @@ export default function SKUsPage() {
               className="block w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 placeholder:text-gray-400"
             />
           </div>
+          <div className="flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-gray-500" />
+            <SearchableSelect
+              value={categoryFilter}
+              onChange={(v) => { setCategoryFilter(v); setPage(1) }}
+              placeholder="All categories"
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+              className="min-w-[160px]"
+            />
+          </div>
         </div>
 
         {/* Table */}
@@ -253,9 +283,12 @@ export default function SKUsPage() {
           <DataTable
             columns={columns}
             data={skus}
-            page={page}
-            pageSize={pageSize}
-            total={total}
+            pagination={{
+              page,
+              pageSize,
+              total,
+              totalPages: Math.max(1, Math.ceil(total / pageSize)),
+            }}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
             actions={actions}

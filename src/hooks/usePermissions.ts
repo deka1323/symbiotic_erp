@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAppSelector } from '@/store/hooks'
+import { authFetch } from '@/lib/fetch'
 
 interface Permissions {
   [moduleCode: string]: {
@@ -30,22 +31,14 @@ export function usePermissions(userId?: string, refreshTrigger = 0) {
         setIsLoading(true)
         setError(null)
         // Use token from Redux state if available, otherwise fall back to localStorage.
-        const tokenToUse =
-          accessToken ||
-          (typeof window !== 'undefined' ? localStorage.getItem('accessToken') || undefined : undefined)
-
-        if (!tokenToUse) {
+        if (!accessToken && typeof window !== 'undefined' && !localStorage.getItem('accessToken')) {
           setError('No access token available')
           setPermissions({})
           setIsLoading(false)
           return
         }
 
-        const response = await fetch(`/api/acl/effective/${targetUserId}`, {
-          headers: {
-            Authorization: `Bearer ${tokenToUse}`,
-          },
-        })
+        const response = await authFetch(`/api/acl/effective/${targetUserId}`)
 
         if (!response.ok) {
           throw new Error('Failed to fetch permissions')

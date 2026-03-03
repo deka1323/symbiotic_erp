@@ -83,12 +83,14 @@ export function DataTable<T extends Record<string, any>>({
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [clientPage, setClientPage] = useState(1)
+  const [clientPageSize, setClientPageSize] = useState(pageSize)
 
   const hasServerPagination = Boolean(pagination && onPageChange)
-  const hasClientPagination = !hasServerPagination && enablePagination && data.length > pageSize
+  const effectivePageSize = hasServerPagination ? pageSize : clientPageSize
+  const hasClientPagination = !hasServerPagination && enablePagination && data.length > effectivePageSize
   const effectivePage = hasServerPagination ? page : clientPage
   const effectiveTotal = hasServerPagination ? total : data.length
-  const effectiveTotalPages = Math.max(1, Math.ceil(effectiveTotal / pageSize))
+  const effectiveTotalPages = Math.max(1, Math.ceil(effectiveTotal / effectivePageSize))
 
   const displayData = useMemo(() => {
     let list = [...data]
@@ -104,11 +106,11 @@ export function DataTable<T extends Record<string, any>>({
       }
     }
     if (hasClientPagination) {
-      const start = (effectivePage - 1) * pageSize
-      list = list.slice(start, start + pageSize)
+      const start = (effectivePage - 1) * effectivePageSize
+      list = list.slice(start, start + effectivePageSize)
     }
     return list
-  }, [data, sortKey, sortOrder, enableSort, onSort, columns, hasClientPagination, effectivePage, pageSize])
+  }, [data, sortKey, sortOrder, enableSort, onSort, columns, hasClientPagination, effectivePage, effectivePageSize])
 
   const handleSort = (key: string) => {
     if (!enableSort) return
@@ -150,7 +152,14 @@ export function DataTable<T extends Record<string, any>>({
   }
 
   const effectiveColumns = showSerialNumber
-    ? [{ key: '__serial__', header: '#', render: (_: T, idx?: number) => (idx !== undefined ? (effectivePage - 1) * pageSize + idx + 1 : '') } as Column<T> & { key: string }, ...columns]
+    ? [
+        {
+          key: '__serial__',
+          header: '#',
+          render: (_: T, idx?: number) => (idx !== undefined ? (effectivePage - 1) * effectivePageSize + idx + 1 : ''),
+        } as Column<T> & { key: string },
+        ...columns,
+      ]
     : columns
   const colCount = effectiveColumns.length + (actions.length > 0 ? 1 : 0)
   const subCols = subRowColumns ?? columns.filter((c) => c.key !== '__serial__')
@@ -348,9 +357,32 @@ export function DataTable<T extends Record<string, any>>({
       {enablePagination && (effectiveTotalPages > 1 || (hasClientPagination && data.length > pageSize)) && (
         <div className={`px-2 py-2 border-t border-gray-200 bg-gray-50/80 flex flex-wrap items-center justify-between gap-2 ${textSize}`}>
           <div className="text-gray-600">
-            Showing {(effectivePage - 1) * pageSize + 1} to {Math.min(effectivePage * pageSize, effectiveTotal)} of {effectiveTotal}
+            Showing {(effectivePage - 1) * effectivePageSize + 1} to {Math.min(effectivePage * effectivePageSize, effectiveTotal)} of {effectiveTotal}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <select
+              value={effectivePageSize}
+              onChange={(e) => {
+                const newSize = Number(e.target.value)
+                if (!hasServerPagination) {
+                  setClientPage(1)
+                  setClientPageSize(newSize)
+                }
+                onPageSizeChange?.(newSize)
+                if (hasServerPagination) {
+                  onPageChange?.(1)
+                }
+              }}
+              className="border border-gray-200 bg-white text-gray-700 rounded px-1.5 py-1"
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-1 ml-auto">
             <button
               onClick={() => (hasServerPagination ? onPageChange?.(effectivePage - 1) : setClientPage((p) => Math.max(1, p - 1)))}
               disabled={effectivePage === 1}

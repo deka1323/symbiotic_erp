@@ -1,7 +1,8 @@
 import redis from '../redis'
 import { JWTPayload } from './jwt'
+import { SESSION_TTL_SECONDS } from './jwt'
 
-const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60 // 7 days in seconds
+const REFRESH_TOKEN_TTL = SESSION_TTL_SECONDS // 6 hours
 
 interface RefreshTokenData {
   userId: string

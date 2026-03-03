@@ -95,6 +95,16 @@ export const sidebarMenuItems: MenuItem[] = [
         },
       },
       {
+        label: 'Categories',
+        href: '/basic-config/categories',
+        icon: <Package className="w-4 h-4" />,
+        permission: {
+          moduleCode: 'basic-configuration',
+          featureCode: 'show_categories_in_sidebar',
+          privilegeCode: 'view',
+        },
+      },
+      {
         label: 'Inventories',
         href: '/basic-config/inventories',
         icon: <Warehouse className="w-4 h-4" />,

@@ -1,6 +1,7 @@
 'use client'
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import { authFetch } from '@/lib/fetch'
 
 export interface User {
   id: string
@@ -46,18 +47,13 @@ export const fetchUsers = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString(),
         ...(search && { search }),
       })
 
-      const response = await fetch(`/api/acl/users?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch(`/api/acl/users?${params}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch users')

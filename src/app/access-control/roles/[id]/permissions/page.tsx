@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { RolePermissionManager } from '@/components/access-control/RolePermissionManager'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/fetch'
 
 interface Role {
   id: string
@@ -28,12 +29,7 @@ export default function RolePermissionsPage() {
   const fetchRole = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(`/api/acl/roles/${roleId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch(`/api/acl/roles/${roleId}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch role')

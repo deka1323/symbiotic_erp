@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { DataTable, Column, Action } from '@/components/DataTable'
 import { Plus, Search, Users, Key, Edit, Trash2 } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+import { authFetch } from '@/lib/fetch'
 
 interface Role {
   id: string
@@ -34,18 +35,13 @@ export default function RolesPage() {
   const fetchRoles = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString(),
         ...(search && { search }),
       })
 
-      const response = await fetch(`/api/acl/roles?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch(`/api/acl/roles?${params}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch roles')
@@ -67,12 +63,8 @@ export default function RolesPage() {
     }
 
     try {
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(`/api/acl/roles/${role.id}`, {
+      const response = await authFetch(`/api/acl/roles/${role.id}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
 
       if (!response.ok) {

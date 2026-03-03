@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { DataTable, Column, Action } from '@/components/DataTable'
 import { Plus, Search, Users, UserCircle, CheckCircle, XCircle, Shield } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
+import { authFetch } from '@/lib/fetch'
 
 interface User {
   id: string
@@ -37,18 +38,13 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString(),
         ...(search && { search }),
       })
 
-      const response = await fetch(`/api/acl/users?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch(`/api/acl/users?${params}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch users')

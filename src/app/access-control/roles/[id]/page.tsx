@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, Save, Shield } from 'lucide-react'
+import { authFetch } from '@/lib/fetch'
 
 interface Role {
   id: string
@@ -34,12 +35,7 @@ export default function RoleDetailsPage() {
   const fetchRole = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(`/api/acl/roles/${roleId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authFetch(`/api/acl/roles/${roleId}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch role')
@@ -61,15 +57,13 @@ export default function RoleDetailsPage() {
   const handleSave = async () => {
     try {
       setIsSaving(true)
-      const token = localStorage.getItem('accessToken')
       const url = isNew ? '/api/acl/roles' : `/api/acl/roles/${roleId}`
       const method = isNew ? 'POST' : 'PUT'
 
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           code,

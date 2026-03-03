@@ -2,148 +2,138 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { DataTable, Column, Action } from '@/components/DataTable'
-import { Plus, Search, Warehouse, CheckCircle, XCircle, Edit, Trash2, RotateCcw } from 'lucide-react'
+import { Plus, Search, Package, CheckCircle, XCircle, Edit, Trash2, RotateCcw } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 import { authFetch } from '@/lib/fetch'
 
-interface Inventory {
+interface Category {
   id: string
-  code: string
   name: string
-  type: 'PRODUCTION' | 'HUB' | 'STORE'
-  address?: string | null
-  contact?: string | null
   isActive: boolean
 }
 
-export default function InventoriesPage() {
-  const [items, setItems] = useState<Inventory[]>([])
+export default function CategoriesPage() {
+  const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<string>('')
   const [showCreate, setShowCreate] = useState(false)
-  const [editing, setEditing] = useState<Inventory | null>(null)
+  const [editing, setEditing] = useState<Category | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchItems()
-  }, [page, pageSize, search, typeFilter])
+    fetchCategories()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, search])
 
-  const fetchItems = async () => {
+  const fetchCategories = async () => {
     try {
       setIsLoading(true)
       setError(null)
+      const token = localStorage.getItem('accessToken')
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString(),
         ...(search && { search }),
-        ...(typeFilter && { type: typeFilter }),
       })
 
-      const res = await authFetch(`/api/basic-config/inventories?${params}`)
+      const res = await fetch(`/api/basic-config/categories?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
 
       if (!res.ok) {
-        throw new Error('Failed to fetch inventories')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to fetch categories')
       }
 
       const data = await res.json()
-      setItems(data.data || [])
+      setCategories(data.data || [])
       setTotal(data.pagination?.total || 0)
     } catch (err: any) {
       console.error(err)
-      setError(err.message || 'Failed to fetch inventories')
-      setItems([])
+      setError(err.message || 'Failed to fetch categories')
+      setCategories([])
+      setTotal(0)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleCreate = async (payload: Partial<Inventory>) => {
+  const handleCreate = async (payload: Partial<Category>) => {
     try {
       setError(null)
-      const res = await authFetch('/api/basic-config/inventories', {
+      const res = await authFetch('/api/basic-config/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to create inventory')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to create category')
       }
 
       setShowCreate(false)
-      fetchItems()
+      fetchCategories()
     } catch (err: any) {
-      setError(err.message || 'Failed to create inventory')
+      console.error(err)
+      setError(err.message || 'Failed to create category')
     }
   }
 
-  const handleUpdate = async (id: string, payload: Partial<Inventory>) => {
+  const handleUpdate = async (id: string, payload: Partial<Category>) => {
     try {
       setError(null)
       const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/basic-config/inventories/${id}`, {
+      const res = await fetch(`/api/basic-config/categories/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to update inventory')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update category')
       }
 
       setEditing(null)
-      fetchItems()
+      fetchCategories()
     } catch (err: any) {
-      setError(err.message || 'Failed to update inventory')
+      console.error(err)
+      setError(err.message || 'Failed to update category')
     }
   }
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
       setError(null)
-      const res = await authFetch(`/api/basic-config/inventories/${id}`, {
+      const res = await authFetch(`/api/basic-config/categories/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !currentStatus }),
       })
 
       if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to update inventory status')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update category status')
       }
 
-      fetchItems()
+      fetchCategories()
     } catch (err: any) {
-      setError(err.message || 'Failed to update inventory status')
+      console.error(err)
+      setError(err.message || 'Failed to update category status')
     }
   }
 
-  const getTypeBadgeColor = (type: string) => {
-    switch (type) {
-      case 'PRODUCTION':
-        return 'bg-blue-100 text-blue-700'
-      case 'HUB':
-        return 'bg-purple-100 text-purple-700'
-      case 'STORE':
-        return 'bg-green-100 text-green-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
-    }
-  }
-
-  const columns: Column<Inventory>[] = [
+  const columns: Column<Category>[] = [
     {
-      key: 'code',
-      header: 'Code',
+      key: 'id',
+      header: 'Category ID',
       sortable: true,
       render: (row) => (
-        <div className="font-medium text-gray-900 text-xs">{row.code}</div>
+        <div className="font-medium text-gray-900 text-xs">{row.id}</div>
       ),
     },
     {
@@ -152,33 +142,6 @@ export default function InventoriesPage() {
       sortable: true,
       render: (row) => (
         <div className="text-xs text-gray-900">{row.name}</div>
-      ),
-    },
-    {
-      key: 'type',
-      header: 'Type',
-      render: (row) => (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getTypeBadgeColor(row.type)}`}>
-          {row.type}
-        </span>
-      ),
-    },
-    {
-      key: 'address',
-      header: 'Address',
-      render: (row) => (
-        <div className="text-xs text-gray-500 truncate max-w-xs">
-          {row.address || '—'}
-        </div>
-      ),
-    },
-    {
-      key: 'contact',
-      header: 'Contact',
-      render: (row) => (
-        <div className="text-xs text-gray-500">
-          {row.contact || '—'}
-        </div>
       ),
     },
     {
@@ -202,16 +165,16 @@ export default function InventoriesPage() {
     },
   ]
 
-  const actions: Action<Inventory>[] = [
+  const actions: Action<Category>[] = [
     {
       label: 'Edit',
       icon: <Edit className="w-4 h-4" />,
       onClick: (row) => setEditing(row),
     },
     {
-      label: row => row.isActive ? 'Deactivate' : 'Activate',
-      icon: row => row.isActive ? <Trash2 className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />,
-      variant: row => row.isActive ? 'danger' : 'default',
+      label: (row) => (row.isActive ? 'Deactivate' : 'Activate'),
+      icon: (row) => (row.isActive ? <Trash2 className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />),
+      variant: (row) => (row.isActive ? 'danger' : 'default'),
       onClick: (row) => handleToggleActive(row.id, row.isActive),
     },
   ]
@@ -221,21 +184,21 @@ export default function InventoriesPage() {
       {/* Header */}
       <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200/80 px-4 py-3 shadow-sm">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Inventory Management</h2>
-          <p className="text-[11px] text-gray-500 mt-0.5">Manage inventories and their configurations</p>
+          <h2 className="text-sm font-semibold text-gray-900">Category Management</h2>
+          <p className="text-[11px] text-gray-500 mt-0.5">Manage SKU categories</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 rounded-lg border border-blue-100">
-            <Warehouse className="w-3.5 h-3.5 text-blue-600" />
-            <span className="text-xs font-medium text-blue-700">{total} inventories</span>
+            <Package className="w-3.5 h-3.5 text-blue-600" />
+            <span className="text-xs font-medium text-blue-700">{total} categories</span>
           </div>
-          <PermissionGate moduleCode="basic-configuration" featureCode="inventory_management" privilegeCode="create">
+          <PermissionGate moduleCode="basic-configuration" featureCode="category_management" privilegeCode="create">
             <button
               onClick={() => setShowCreate(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
             >
               <Plus className="w-3.5 h-3.5" />
-              Create Inventory
+              Create Category
             </button>
           </PermissionGate>
         </div>
@@ -250,15 +213,15 @@ export default function InventoriesPage() {
 
       {/* Content Card */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200/80 overflow-hidden">
-        {/* Search and Filters */}
-        <div className="p-3 border-b border-gray-200/80 bg-gray-50/50 space-y-2">
+        {/* Search */}
+        <div className="p-3 border-b border-gray-200/80 bg-gray-50/50">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
               <Search className="h-3.5 w-3.5 text-gray-400" />
             </div>
             <input
               type="text"
-              placeholder="Search inventories by code or name..."
+              placeholder="Search categories by ID or name..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
@@ -267,29 +230,13 @@ export default function InventoriesPage() {
               className="block w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 placeholder:text-gray-400"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-600">Filter by type:</label>
-            <select
-              value={typeFilter}
-              onChange={(e) => {
-                setTypeFilter(e.target.value)
-                setPage(1)
-              }}
-              className="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-            >
-              <option value="">All Types</option>
-              <option value="PRODUCTION">Production</option>
-              <option value="HUB">Hub</option>
-              <option value="STORE">Store</option>
-            </select>
-          </div>
         </div>
 
         {/* Table */}
         <div className="p-3">
           <DataTable
             columns={columns}
-            data={items}
+            data={categories}
             pagination={{
               page,
               pageSize,
@@ -307,7 +254,7 @@ export default function InventoriesPage() {
 
       {/* Create Modal */}
       {showCreate && (
-        <InventoryModal
+        <CategoryModal
           onSave={handleCreate}
           onClose={() => {
             setShowCreate(false)
@@ -318,7 +265,7 @@ export default function InventoriesPage() {
 
       {/* Edit Modal */}
       {editing && (
-        <InventoryModal
+        <CategoryModal
           initial={editing}
           onSave={(p) => handleUpdate(editing.id, p)}
           onClose={() => {
@@ -331,20 +278,17 @@ export default function InventoriesPage() {
   )
 }
 
-function InventoryModal({
+function CategoryModal({
   initial,
   onSave,
   onClose,
 }: {
-  initial?: Inventory
-  onSave: (payload: Partial<Inventory>) => void
+  initial?: Category
+  onSave: (payload: Partial<Category>) => void
   onClose: () => void
 }) {
-  const [code, setCode] = useState(initial?.code || '')
+  const [id, setId] = useState(initial?.id || '')
   const [name, setName] = useState(initial?.name || '')
-  const [type, setType] = useState<Inventory['type']>(initial?.type || 'PRODUCTION')
-  const [address, setAddress] = useState(initial?.address || '')
-  const [contact, setContact] = useState(initial?.contact || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
 
@@ -363,13 +307,7 @@ function InventoryModal({
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      await onSave({
-        code,
-        name,
-        type,
-        address: address || undefined,
-        contact: contact || undefined,
-      })
+      await onSave({ id, name })
     } finally {
       setIsSubmitting(false)
     }
@@ -383,7 +321,7 @@ function InventoryModal({
       >
         <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-900">
-            {initial ? 'Edit Inventory' : 'Create Inventory'}
+            {initial ? 'Edit Category' : 'Create Category'}
           </h3>
           <button
             onClick={onClose}
@@ -397,16 +335,16 @@ function InventoryModal({
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              Code <span className="text-red-500">*</span>
+              Category ID <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
+              value={id}
+              onChange={(e) => setId(e.target.value)}
               required
               disabled={!!initial}
               className="block w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white disabled:bg-gray-50 disabled:text-gray-500"
-              placeholder="INV-001"
+              placeholder="CATEGORY-001"
             />
           </div>
           <div>
@@ -419,42 +357,7 @@ function InventoryModal({
               onChange={(e) => setName(e.target.value)}
               required
               className="block w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-              placeholder="Inventory Name"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as Inventory['type'])}
-              required
-              className="block w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-            >
-              <option value="PRODUCTION">Production</option>
-              <option value="HUB">Hub</option>
-              <option value="STORE">Store</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
-            <textarea
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              rows={2}
-              className="block w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white resize-none"
-              placeholder="Optional address"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Contact</label>
-            <input
-              type="text"
-              value={contact}
-              onChange={(e) => setContact(e.target.value)}
-              className="block w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-              placeholder="Optional contact information"
+              placeholder="Category Name"
             />
           </div>
           <div className="flex gap-2 justify-end pt-2">
@@ -468,7 +371,7 @@ function InventoryModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !code || !name || !type}
+              disabled={isSubmitting || !id || !name}
               className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Saving...' : initial ? 'Update' : 'Create'}
@@ -479,3 +382,4 @@ function InventoryModal({
     </div>
   )
 }
+

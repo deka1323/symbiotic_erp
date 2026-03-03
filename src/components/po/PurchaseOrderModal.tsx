@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { X, Plus, Trash2, Package, User, Calendar, MapPin, ArrowRight } from 'lucide-react'
+import { authFetch } from '@/lib/fetch'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
 export function PurchaseOrderModal({
   mode,
@@ -21,16 +25,17 @@ export function PurchaseOrderModal({
   const [inventories, setInventories] = useState<any[]>([])
   const [skus, setSkus] = useState<any[]>([])
   const [toInventoryId, setToInventoryId] = useState('')
-  const [items, setItems] = useState<Array<{ skuId: string; requestedQuantity: number }>>([
-    { skuId: '', requestedQuantity: 1 },
+  const [items, setItems] = useState<Array<{ skuId: string; requestedQuantity: string }>>([
+    { skuId: '', requestedQuantity: '' },
   ])
+  const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [creatorName, setCreatorName] = useState<string | null>(null)
-  const modalRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+      if (overlayRef.current && event.target === overlayRef.current) {
         onClose()
       }
     }
@@ -43,18 +48,13 @@ export function PurchaseOrderModal({
     // Fetch inventories and SKUs for create mode
     const fetchMeta = async () => {
       try {
-        const token = localStorage.getItem('accessToken')
-        const invRes = await fetch('/api/basic-config/inventories?page=1&pageSize=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const invRes = await authFetch('/api/basic-config/inventories?page=1&pageSize=200')
         if (invRes.ok) {
           const invJson = await invRes.json()
           setInventories((invJson.data || []).filter((i: any) => i.isActive))
         }
 
-        const skuRes = await fetch('/api/basic-config/skus?page=1&pageSize=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const skuRes = await authFetch('/api/basic-config/skus?page=1&pageSize=200')
         if (skuRes.ok) {
           const skuJson = await skuRes.json()
           setSkus((skuJson.data || []).filter((s: any) => s.isActive))
@@ -76,13 +76,13 @@ export function PurchaseOrderModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, po])
 
-  const addItemRow = () => setItems((s) => [...s, { skuId: '', requestedQuantity: 1 }])
+  const addItemRow = () => setItems((s) => [...s, { skuId: '', requestedQuantity: '' }])
   const removeItemRow = (idx: number) => setItems((s) => s.filter((_, i) => i !== idx))
   const updateItem = (idx: number, key: string, value: any) => {
     setItems((s) => s.map((it, i) => (i === idx ? { ...it, [key]: value } : it)))
   }
 
-  const handleCreate = async () => {
+  const requestCreate = () => {
     if (!fromInventory) {
       onError?.('From inventory is required')
       return
@@ -100,23 +100,39 @@ export function PurchaseOrderModal({
       return
     }
     for (const it of items) {
-      if (!it.skuId || it.requestedQuantity < 1) {
-        onError?.('Please provide valid SKU and quantity for all items')
+      if (!it.skuId) {
+        onError?.('Please provide valid SKU for all items')
+        return
+      }
+      const q = parsePositiveInteger(it.requestedQuantity)
+      if (q === null || q < 1) {
+        onError?.('Amount can not be zero.')
         return
       }
     }
-    
+    setShowConfirm(true)
+  }
+
+  const handleCreate = async () => {
+    if (!fromInventory || !toInventoryId) return
+    const parsed = items
+      .map((it) => ({ skuId: it.skuId, requestedQuantity: parsePositiveInteger(it.requestedQuantity) ?? 0 }))
+      .filter((it) => it.skuId && it.requestedQuantity >= 1)
+    if (parsed.some((p) => p.requestedQuantity < 1)) {
+      onError?.('Amount can not be zero.')
+      return
+    }
     setIsSubmitting(true)
+    setShowConfirm(false)
     try {
-      const token = localStorage.getItem('accessToken')
       const payload = {
         fromInventoryId: fromInventory.id,
         toInventoryId,
-        items: items.filter((it) => it.skuId && it.requestedQuantity >= 1),
+        items: parsed,
       }
-      const res = await fetch('/api/inventory/purchase-orders', {
+      const res = await authFetch('/api/inventory/purchase-orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
@@ -148,10 +164,10 @@ export function PurchaseOrderModal({
     }
 
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+      <div ref={overlayRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
         <div
-          ref={modalRef}
           className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-3xl overflow-auto max-h-[90vh] animate-fade-in"
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
             <h3 className="text-sm font-semibold text-gray-900">Purchase Order Details</h3>
@@ -272,10 +288,10 @@ export function PurchaseOrderModal({
 
   // Create mode UI
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+    <div ref={overlayRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
       <div
-        ref={modalRef}
         className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl animate-fade-in"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
           <h3 className="text-sm font-semibold text-gray-900">Create Purchase Order</h3>
@@ -301,20 +317,15 @@ export function PurchaseOrderModal({
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 To Inventory <span className="text-red-500">*</span>
               </label>
-              <select
+              <SearchableSelect
                 value={toInventoryId}
-                onChange={(e) => setToInventoryId(e.target.value)}
-                className="block w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-              >
-                <option value="">Select inventory</option>
-                {inventories
+                onChange={setToInventoryId}
+                placeholder="Select inventory"
+                options={inventories
                   .filter((i: any) => i.id !== fromInventory?.id)
-                  .map((inv: any) => (
-                    <option key={inv.id} value={inv.id}>
-                      {inv.name} ({inv.type})
-                    </option>
-                  ))}
-              </select>
+                  .map((inv: any) => ({ value: inv.id, label: `${inv.name} (${inv.type})` }))}
+                className="block w-full"
+              />
             </div>
           </div>
 
@@ -336,26 +347,18 @@ export function PurchaseOrderModal({
             <div className="space-y-2">
               {items.map((it, idx) => (
                 <div key={idx} className="flex items-center gap-2 p-2 border border-gray-200 rounded-lg">
-                  <select
+                  <SearchableSelect
                     value={it.skuId}
-                    onChange={(e) => updateItem(idx, 'skuId', e.target.value)}
-                    className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                  >
-                    <option value="">Select SKU</option>
-                    {skus.map((s: any) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.code})
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
+                    onChange={(v) => updateItem(idx, 'skuId', v)}
+                    placeholder="Select SKU"
+                    options={skus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                    className="flex-1"
+                  />
+                  <PositiveIntegerInput
                     value={it.requestedQuantity}
-                    onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateItem(idx, 'requestedQuantity', Math.max(1, isNaN(v) ? 1 : v)); }}
-                    className="w-24 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    onChange={(v) => updateItem(idx, 'requestedQuantity', v)}
                     placeholder="Qty"
+                    className="w-24 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
                   />
                   <button
                     type="button"
@@ -380,14 +383,35 @@ export function PurchaseOrderModal({
             Cancel
           </button>
           <button
-            onClick={handleCreate}
-            disabled={isSubmitting || !toInventoryId || items.length === 0 || items.some((it) => !it.skuId || it.requestedQuantity < 1)}
+            onClick={requestCreate}
+            disabled={isSubmitting || !toInventoryId || items.length === 0 || items.some((it) => !it.skuId || parsePositiveInteger(it.requestedQuantity) == null)}
             className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Creating...' : 'Create PO'}
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={showConfirm}
+        title="Confirm Create Purchase Order"
+        onConfirm={handleCreate}
+        onCancel={() => setShowConfirm(false)}
+        confirmLabel="Create PO"
+        loading={isSubmitting}
+      >
+        <div className="text-xs text-gray-700 space-y-1">
+          <p><strong>From:</strong> {fromInventory?.name}</p>
+          <p><strong>To:</strong> {inventories.find((i: any) => i.id === toInventoryId)?.name || toInventoryId}</p>
+          <p className="mt-2"><strong>Items:</strong></p>
+          <ul className="list-disc list-inside ml-1">
+            {items.map((it, i) => {
+              const sku = skus.find((s: any) => s.id === it.skuId)
+              const q = parsePositiveInteger(it.requestedQuantity)
+              return <li key={i}>{sku?.name || sku?.code || it.skuId || '—'}: {q ?? 0}</li>
+            })}
+          </ul>
+        </div>
+      </ConfirmDialog>
     </div>
   )
 }
