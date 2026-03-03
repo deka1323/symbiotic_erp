@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         take: pageSize,
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.category.count({ where }),
+      (prisma as any).category.count({ where }),
     ])
 
     return NextResponse.json({
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const validated = createCategorySchema.parse(body)
 
-    const created = await prisma.category.create({
+    const created = await (prisma as any).category.create({
       data: {
         id: validated.id,
         name: validated.name,

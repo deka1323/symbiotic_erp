@@ -16,7 +16,7 @@ export async function GET(
   if ('error' in authResult) return authResult.error
 
   try {
-    const category = await prisma.category.findUnique({
+    const category = await (prisma as any).category.findUnique({
       where: { id: params.id },
     })
     if (!category) {
@@ -40,7 +40,7 @@ export async function PUT(
     const body = await req.json()
     const validated = updateCategorySchema.parse(body)
 
-    const updated = await prisma.category.update({
+    const updated = await (prisma as any).category.update({
       where: { id: params.id },
       data: {
         ...validated,
@@ -71,7 +71,7 @@ export async function PATCH(
   try {
     const body = await req.json()
     if (typeof body.isActive === 'boolean') {
-      const updated = await prisma.category.update({
+      const updated = await (prisma as any).category.update({
         where: { id: params.id },
         data: { isActive: body.isActive },
       })
