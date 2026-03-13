@@ -49,7 +49,13 @@ export function InventorySelector() {
     <div className="flex items-center gap-2">
       <div className="relative" ref={dropdownRef}>
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => {
+            if (typeof window !== 'undefined' && (window as any).__suppressNextHeaderDropdownClick) {
+              (window as any).__suppressNextHeaderDropdownClick = false
+              return
+            }
+            setIsOpen(!isOpen)
+          }}
           className="flex items-center gap-2 px-2 py-1 rounded text-xs bg-white border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors"
           title="Select Inventory"
         >

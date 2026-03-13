@@ -87,7 +87,7 @@ export default function DailyProductionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const modalRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
 
   const fetchSkus = async () => {
     try {
@@ -129,7 +129,7 @@ export default function DailyProductionPage() {
   }, [successMessage])
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(e.target as Node)) setShowAddModal(false)
+      if (overlayRef.current && e.target === overlayRef.current) setShowAddModal(false)
     }
     if (showAddModal) {
       document.addEventListener('mousedown', handleClickOutside)
@@ -189,7 +189,7 @@ export default function DailyProductionPage() {
     }
   }
 
-  const openAddModal = () => { setItems([]); setErrorMessage(null); setShowConfirm(false); setShowAddModal(true) }
+  const openAddModal = () => { setItems([{ skuId: '', quantity: '' }]); setErrorMessage(null); setShowConfirm(false); setShowAddModal(true) }
   const columns = getProductionColumns()
 
   return (
@@ -224,8 +224,8 @@ export default function DailyProductionPage() {
         </div>
       </div>
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div ref={modalRef} className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-fade-in">
+        <div ref={overlayRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50/80 to-white">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white"><Package className="w-5 h-5" /></div>
@@ -251,20 +251,25 @@ export default function DailyProductionPage() {
                   <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-8 text-center text-xs text-gray-500">No items yet. Click &quot;Add item&quot; to add SKU and quantity.</div>
                 ) : (
                   <div className="space-y-2">
-                    {items.map((it, idx) => (
+                    {items.map((it, idx) => {
+                      const selectedInOtherRows = items.filter((_, i) => i !== idx).map((i) => i.skuId).filter(Boolean)
+                      const skuOptions = skus
+                        .filter((s) => s.id === it.skuId || !selectedInOtherRows.includes(s.id))
+                        .map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))
+                      return (
                       <div key={idx} className="flex flex-wrap items-center gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/50">
                         <SearchableSelect
                           value={it.skuId}
                           onChange={(v) => updateItem(idx, { skuId: v })}
                           placeholder="Select SKU"
-                          options={skus.map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                          options={skuOptions}
                           menuPortal
                           className="flex-1 min-w-[200px]"
                         />
                         <PositiveIntegerInput value={it.quantity} onChange={(v) => updateItem(idx, { quantity: v })} className="w-24 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white tabular-nums" placeholder="Qty" />
                         <button type="button" onClick={() => removeItem(idx)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove"><Trash2 className="w-4 h-4" /></button>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
               </div>

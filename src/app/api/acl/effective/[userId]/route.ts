@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authMiddleware } from '@/lib/middleware/auth'
 import { getEffectivePermissions, hasPermission } from '@/lib/acl/permissions'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/acl/effective/:userId - Get effective permissions for user
 export async function GET(
   req: NextRequest,

@@ -106,8 +106,21 @@ export function SearchableSelect({
   }, [open, menuPortal])
 
   const handleSelect = (val: string) => {
+    if (menuPortal && typeof window !== 'undefined') {
+      (window as any).__suppressNextHeaderDropdownClick = true
+      setTimeout(() => { (window as any).__suppressNextHeaderDropdownClick = false }, 150)
+    }
     onChange(val)
     setOpen(false)
+    if (menuPortal && typeof document !== 'undefined') {
+      const consumeNextClick = (e: MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        document.removeEventListener('click', consumeNextClick, true)
+      }
+      document.addEventListener('click', consumeNextClick, true)
+      setTimeout(() => document.removeEventListener('click', consumeNextClick, true), 300)
+    }
   }
 
   const handleComboboxKeyDown = (e: React.KeyboardEvent) => {
@@ -203,6 +216,7 @@ export function SearchableSelect({
             type="button"
             onMouseDown={(e) => {
               e.preventDefault()
+              e.stopPropagation()
               handleSelect('')
             }}
             className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${!value ? 'bg-blue-50 text-blue-700' : 'text-gray-500'}`}
@@ -216,6 +230,7 @@ export function SearchableSelect({
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault()
+                e.stopPropagation()
                 handleSelect(opt.value)
               }}
               className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-100 truncate ${opt.value === value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-900'}`}
