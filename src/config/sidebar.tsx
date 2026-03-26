@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { Home, LayoutDashboard, Shield, Key, Lock, Zap, ShieldCheck, Users, DollarSign, Settings, Package, Warehouse, FileText, BarChart3 } from 'lucide-react'
+import { Home, LayoutDashboard, Shield, Key, Lock, Zap, ShieldCheck, Users, DollarSign, Settings, Package, Warehouse, FileText, BarChart3, Store } from 'lucide-react'
 
 export interface MenuItem {
   label: string
@@ -121,6 +121,16 @@ export const sidebarMenuItems: MenuItem[] = [
         permission: {
           moduleCode: 'basic-configuration',
           featureCode: 'show_employees_in_sidebar',
+          privilegeCode: 'view',
+        },
+      },
+      {
+        label: 'POS Management',
+        href: '/basic-config/pos',
+        icon: <Store className="w-4 h-4" />,
+        permission: {
+          moduleCode: 'basic-configuration',
+          featureCode: 'show_inventories_in_sidebar',
           privilegeCode: 'view',
         },
       },

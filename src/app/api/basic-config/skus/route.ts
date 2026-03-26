@@ -7,6 +7,7 @@ const createSkuSchema = z.object({
   code: z.string().min(1).max(100),
   name: z.string().min(1).max(255),
   description: z.string().optional(),
+  price: z.coerce.number().min(0),
   unit: z.string().optional().default('packets'),
   isActive: z.boolean().optional().default(true),
 })
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
         code: validated.code,
         name: validated.name,
         description: validated.description,
+        price: validated.price,
         unit: validated.unit,
         isActive: validated.isActive,
       },

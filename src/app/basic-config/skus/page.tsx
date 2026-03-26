@@ -12,6 +12,7 @@ interface SKU {
   code: string
   name: string
   description?: string | null
+  price: number
   unit: string
   isActive: boolean
   categoryId?: string | null
@@ -160,6 +161,16 @@ export default function SKUsPage() {
       sortable: true,
       render: (row) => (
         <div className="text-xs text-gray-900">{row.name}</div>
+      ),
+    },
+    {
+      key: 'price',
+      header: 'Price',
+      sortable: true,
+      render: (row) => (
+        <span className="text-xs font-medium text-gray-900">
+          Rs. {Number(row.price ?? 0).toFixed(2)}
+        </span>
       ),
     },
     {
@@ -336,6 +347,7 @@ function SKUModal({
   const [code, setCode] = useState(initial?.code || '')
   const [name, setName] = useState(initial?.name || '')
   const [description, setDescription] = useState(initial?.description || '')
+  const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : '0')
   const [unit, setUnit] = useState(initial?.unit || 'packets')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -355,7 +367,7 @@ function SKUModal({
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      await onSave({ code, name, description: description || undefined, unit })
+      await onSave({ code, name, description: description || undefined, price: Number(price || 0), unit })
     } finally {
       setIsSubmitting(false)
     }
@@ -420,6 +432,21 @@ function SKUModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
+              Price <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              required
+              className="block w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              placeholder="0.00"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               Unit <span className="text-red-500">*</span>
             </label>
             <input
@@ -442,7 +469,7 @@ function SKUModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !code || !name || !unit}
+              disabled={isSubmitting || !code || !name || !unit || Number(price) < 0}
               className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Saving...' : initial ? 'Update' : 'Create'}

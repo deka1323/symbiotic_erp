@@ -7,6 +7,7 @@ const updateSkuSchema = z.object({
   code: z.string().min(1).max(100).optional(),
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional(),
+  price: z.coerce.number().min(0).optional(),
   unit: z.string().optional(),
   isActive: z.boolean().optional(),
 })
