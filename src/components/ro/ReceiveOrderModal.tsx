@@ -40,6 +40,9 @@ export function ReceiveOrderModal({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // When confirmation dialog is open, ignore parent outside-click close.
+      // Otherwise clicking confirm can close/unmount the parent before submit runs.
+      if (showConfirm) return
       if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
         onClose()
       }
@@ -47,7 +50,7 @@ export function ReceiveOrderModal({
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [onClose])
+  }, [onClose, showConfirm])
 
   useEffect(() => {
     // Fetch inventories and SKUs for create modes
