@@ -33,14 +33,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only STORE inventory can be linked to POS' }, { status: 400 })
     }
 
-    const created = await (prisma as any).pOS.create({
-      data: {
-        code: payload.code,
-        name: payload.name,
-        linkedInventoryId: payload.linkedInventoryId,
-        timezone: payload.timezone,
-        currency: payload.currency,
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      // POS is created with an empty menu context; admin will manage menu SKUs explicitly.
+      return (tx as any).pOS.create({
+        data: {
+          code: payload.code,
+          name: payload.name,
+          linkedInventoryId: payload.linkedInventoryId,
+          timezone: payload.timezone,
+          currency: payload.currency,
+        },
+      })
     })
     return NextResponse.json({ data: created }, { status: 201 })
   } catch (error) {

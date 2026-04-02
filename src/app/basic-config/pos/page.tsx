@@ -43,6 +43,17 @@ interface POSUserRow {
   }>
 }
 
+interface SkuMenuRow {
+  skuId: string
+  skuCode: string
+  skuName: string
+  skuPrice: number | string
+  inMenu: boolean
+  menuItemId: string | null
+  menuPrice: number | string | null
+  menuActive: boolean | null
+}
+
 export default function POSManagementPage() {
   const [items, setItems] = useState<POSItem[]>([])
   const [inventories, setInventories] = useState<InventoryOption[]>([])
@@ -53,6 +64,12 @@ export default function POSManagementPage() {
   const [showCreatePos, setShowCreatePos] = useState(false)
   const [editingPos, setEditingPos] = useState<POSItem | null>(null)
   const [showCreateUser, setShowCreateUser] = useState(false)
+  const [menuRows, setMenuRows] = useState<SkuMenuRow[]>([])
+  const [menuLoading, setMenuLoading] = useState(false)
+  const [menuSearch, setMenuSearch] = useState('')
+  const [selectedMenuSkuIds, setSelectedMenuSkuIds] = useState<string[]>([])
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  const [editingMenu, setEditingMenu] = useState<SkuMenuRow | null>(null)
 
   useEffect(() => {
     void fetchPOS()
@@ -62,9 +79,11 @@ export default function POSManagementPage() {
   useEffect(() => {
     if (!selectedPosId) {
       setPosUsers([])
+      setMenuRows([])
       return
     }
     void fetchPOSUsers(selectedPosId)
+    void fetchSkuMenuRows(selectedPosId)
   }, [selectedPosId])
 
   const selectedPos = useMemo(() => items.find((p) => p.id === selectedPosId) || null, [items, selectedPosId])
@@ -114,6 +133,25 @@ export default function POSManagementPage() {
     } catch (err: any) {
       setError(err.message || 'Failed to fetch POS users')
       setPosUsers([])
+    }
+  }
+
+  const fetchSkuMenuRows = async (posId: string) => {
+    try {
+      setMenuLoading(true)
+      const res = await authFetch(`/api/pos-admin/pos/${posId}/menu?mode=all-skus`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Failed to fetch POS menu')
+      }
+      const body = await res.json()
+      setMenuRows(body.data || [])
+      setSelectedMenuSkuIds([])
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch POS menu')
+      setMenuRows([])
+    } finally {
+      setMenuLoading(false)
     }
   }
 
@@ -168,6 +206,68 @@ export default function POSManagementPage() {
     await fetchPOSUsers(payload.posId)
   }
 
+  const handleBulkAddMenuItems = async (skuIds: string[]) => {
+    if (!selectedPosId) return
+    setError(null)
+    setBulkActionLoading(true)
+    try {
+      const res = await authFetch(`/api/pos-admin/pos/${selectedPosId}/menu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: skuIds.map((skuId) => ({ skuId })),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Failed to add SKU to menu')
+      }
+      await fetchSkuMenuRows(selectedPosId)
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
+  const handleUpdateMenuItem = async (payload: { skuId: string; price?: string; isActive?: boolean }) => {
+    if (!selectedPosId) return
+    setError(null)
+    const res = await authFetch(`/api/pos-admin/pos/${selectedPosId}/menu`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        skuId: payload.skuId,
+        price: payload.price?.trim() || undefined,
+        isActive: payload.isActive,
+      }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || 'Failed to update menu item')
+    }
+    setEditingMenu(null)
+    await fetchSkuMenuRows(selectedPosId)
+  }
+
+  const handleBulkRemoveMenuItems = async (skuIds: string[]) => {
+    if (!selectedPosId) return
+    setError(null)
+    setBulkActionLoading(true)
+    try {
+      const res = await authFetch(`/api/pos-admin/pos/${selectedPosId}/menu`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skuIds }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Failed to remove menu item')
+      }
+      await fetchSkuMenuRows(selectedPosId)
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
   const columns: Column<POSItem>[] = [
     { key: 'code', header: 'POS Code', sortable: true },
     { key: 'name', header: 'POS Name', sortable: true },
@@ -202,6 +302,74 @@ export default function POSManagementPage() {
       label: 'Edit / Relink',
       icon: <Edit className="w-4 h-4" />,
       onClick: (row) => setEditingPos(row),
+    },
+  ]
+
+  const menuColumns: Column<SkuMenuRow>[] = [
+    {
+      key: 'select',
+      header: '',
+      render: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedMenuSkuIds.includes(row.skuId)}
+          onChange={(e) =>
+            setSelectedMenuSkuIds((prev) =>
+              e.target.checked ? [...prev, row.skuId] : prev.filter((id) => id !== row.skuId)
+            )
+          }
+        />
+      ),
+    },
+    { key: 'skuCode', header: 'SKU Code', render: (row) => row.skuCode },
+    { key: 'skuName', header: 'SKU Name', render: (row) => row.skuName },
+    { key: 'skuPrice', header: 'Default SKU Price', render: (row) => `Rs ${Number(row.skuPrice).toFixed(2)}` },
+    { key: 'menuPrice', header: 'Menu Price', render: (row) => (row.inMenu ? `Rs ${Number(row.menuPrice ?? row.skuPrice).toFixed(2)}` : '—') },
+    {
+      key: 'inMenu',
+      header: 'In Menu',
+      render: (row) =>
+        row.inMenu ? (
+          <span className="inline-flex items-center gap-1 text-xs text-green-700">
+            <CheckCircle className="w-3 h-3" /> Added
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs text-red-700">
+            <XCircle className="w-3 h-3" /> Not Added
+          </span>
+        ),
+    },
+    {
+      key: 'menuActive',
+      header: 'Menu Status',
+      render: (row) => (row.inMenu ? (row.menuActive ? 'Active' : 'Inactive') : '—'),
+    },
+  ]
+
+  const filteredMenuRows = useMemo(() => {
+    const q = menuSearch.trim().toLowerCase()
+    if (!q) return menuRows
+    return menuRows.filter((row) => row.skuCode.toLowerCase().includes(q) || row.skuName.toLowerCase().includes(q))
+  }, [menuRows, menuSearch])
+
+  const menuActions: Action<SkuMenuRow>[] = [
+    {
+      label: (row) => (row.inMenu ? 'Edit Price' : 'Add'),
+      icon: <Edit className="w-4 h-4" />,
+      onClick: (row) => {
+        if (!row.inMenu) {
+          void handleBulkAddMenuItems([row.skuId])
+          return
+        }
+        setEditingMenu(row)
+      },
+    },
+    {
+      label: (row) => (row.inMenu ? 'Remove' : '—'),
+      onClick: (row) => {
+        if (!row.inMenu) return
+        void handleBulkRemoveMenuItems([row.skuId])
+      },
     },
   ]
 
@@ -298,6 +466,74 @@ export default function POSManagementPage() {
         </div>
       </div>
 
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200/80 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">POS Menu</h3>
+            <p className="text-[11px] text-gray-500">Manage SKU membership and POS-specific menu pricing</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <select
+              value={selectedPosId}
+              onChange={(e) => setSelectedPosId(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg"
+            >
+              <option value="">Select POS</option>
+              {items.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.code} - {p.name}
+                </option>
+              ))}
+            </select>
+            <input
+              value={menuSearch}
+              onChange={(e) => setMenuSearch(e.target.value)}
+              placeholder="Search SKU code/name"
+              className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg"
+            />
+            <label className="inline-flex items-center gap-2 text-xs px-2 py-1 border border-gray-200 rounded-lg">
+              <input
+                type="checkbox"
+                checked={filteredMenuRows.length > 0 && filteredMenuRows.every((r) => selectedMenuSkuIds.includes(r.skuId))}
+                onChange={(e) =>
+                  setSelectedMenuSkuIds(
+                    e.target.checked ? filteredMenuRows.map((r) => r.skuId) : []
+                  )
+                }
+              />
+              Select All
+            </label>
+            <button
+              disabled={!selectedPos || bulkActionLoading || selectedMenuSkuIds.length === 0}
+              onClick={() => void handleBulkAddMenuItems(selectedMenuSkuIds)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg disabled:opacity-50"
+            >
+              Add Selected
+            </button>
+            <button
+              disabled={!selectedPos || bulkActionLoading || selectedMenuSkuIds.length === 0}
+              onClick={() => void handleBulkRemoveMenuItems(selectedMenuSkuIds)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-rose-600 text-white rounded-lg disabled:opacity-50"
+            >
+              Remove Selected
+            </button>
+          </div>
+        </div>
+        <div className="p-3">
+          <DataTable
+            columns={menuColumns}
+            data={filteredMenuRows}
+            page={1}
+            pageSize={filteredMenuRows.length || 10}
+            total={filteredMenuRows.length}
+            onPageChange={() => {}}
+            onPageSizeChange={() => {}}
+            isLoading={menuLoading}
+            actions={menuActions}
+          />
+        </div>
+      </div>
+
       {showCreatePos && (
         <POSModal
           title="Create POS"
@@ -322,6 +558,14 @@ export default function POSManagementPage() {
           pos={selectedPos}
           onClose={() => setShowCreateUser(false)}
           onSave={handleCreatePOSUser}
+        />
+      )}
+
+      {editingMenu && (
+        <EditMenuItemModal
+          item={editingMenu}
+          onClose={() => setEditingMenu(null)}
+          onSave={handleUpdateMenuItem}
         />
       )}
     </div>
@@ -480,6 +724,66 @@ function CreatePOSUserModal({
           </button>
           <button disabled={isSubmitting} type="submit" className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg disabled:opacity-50">
             {isSubmitting ? 'Creating...' : 'Create User'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function EditMenuItemModal({
+  item,
+  onSave,
+  onClose,
+}: {
+  item: SkuMenuRow
+  onSave: (payload: { skuId: string; price?: string; isActive?: boolean }) => Promise<void>
+  onClose: () => void
+}) {
+  const [price, setPrice] = useState(String(item.menuPrice ?? item.skuPrice))
+  const [isActive, setIsActive] = useState(item.menuActive ?? true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault()
+          setIsSubmitting(true)
+          try {
+            await onSave({ skuId: item.skuId, price, isActive })
+          } finally {
+            setIsSubmitting(false)
+          }
+        }}
+        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-md p-4 space-y-3"
+      >
+        <h3 className="text-sm font-semibold text-gray-900">Edit Menu Item</h3>
+        <div className="text-xs text-gray-600">
+          {item.skuCode} - {item.skuName}
+        </div>
+        <div>
+          <label className="block text-xs mb-1">Menu Price</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg"
+            required
+          />
+        </div>
+        <label className="inline-flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+          Active
+        </label>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs border rounded-lg">
+            Cancel
+          </button>
+          <button disabled={isSubmitting} type="submit" className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg disabled:opacity-50">
+            {isSubmitting ? 'Saving...' : 'Save'}
           </button>
         </div>
       </form>
