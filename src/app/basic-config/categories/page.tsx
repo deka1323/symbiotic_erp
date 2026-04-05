@@ -294,7 +294,9 @@ function CategoryModal({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement
+      if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
+      if (modalRef.current && !modalRef.current.contains(target)) {
         onClose()
       }
     }

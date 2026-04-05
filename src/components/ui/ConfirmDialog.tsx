@@ -25,7 +25,10 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4"
+      data-prevent-modal-dismiss="true"
+    >
       <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md animate-fade-in">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-amber-50/80">
           <h3 className="text-sm font-semibold text-gray-900">{title}</h3>

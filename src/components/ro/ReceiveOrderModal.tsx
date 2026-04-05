@@ -43,7 +43,9 @@ export function ReceiveOrderModal({
       // When confirmation dialog is open, ignore parent outside-click close.
       // Otherwise clicking confirm can close/unmount the parent before submit runs.
       if (showConfirm) return
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement
+      if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
+      if (modalRef.current && !modalRef.current.contains(target)) {
         onClose()
       }
     }

@@ -118,7 +118,10 @@ export default function ManageStockPage() {
   // Handle click outside modal
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+      if (showConfirm) return
+      const target = event.target as HTMLElement
+      if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
+      if (modalRef.current && !modalRef.current.contains(target)) {
         setEditing(null)
         setReason('')
         setNewQtyStr('')
@@ -129,7 +132,7 @@ export default function ManageStockPage() {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [editing])
+  }, [editing, showConfirm])
 
   const openEdit = (skuId: string, batchId: string, currentQty: number) => {
     const stockItem = stocks.find((s) => s.skuId === skuId)

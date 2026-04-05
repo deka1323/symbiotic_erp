@@ -52,18 +52,20 @@ export function TransferOrderModal({
   const [creatorName, setCreatorName] = useState<string | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
-  // Close on outside click (use capture so we run before dropdown item handlers and before any re-render)
+  // Close on outside click — ignore portaled SearchableSelect menus and ConfirmDialog (outside modalRef).
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node
+      if (showConfirm) return
+      const target = event.target as HTMLElement
+      if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
       if (modalRef.current && !modalRef.current.contains(target)) {
         onClose()
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside, true)
-    return () => document.removeEventListener('mousedown', handleClickOutside, true)
-  }, [onClose])
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onClose, showConfirm])
 
   // Load metadata (inventories, SKUs, employees) and initialize state
   useEffect(() => {

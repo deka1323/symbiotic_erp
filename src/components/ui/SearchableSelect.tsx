@@ -249,6 +249,7 @@ export function SearchableSelect({
   const dropdownContent = open ? (
     <div
       ref={menuRef}
+      data-prevent-modal-dismiss={menuPortal ? 'true' : undefined}
       className="flex flex-col bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden min-w-[160px] max-h-[220px]"
       style={menuPortal ? { position: 'fixed' as const, top: menuPosition.top + 4, left: menuPosition.left, width: Math.max(menuPosition.width, 160), zIndex: 9999 } : undefined}
     >

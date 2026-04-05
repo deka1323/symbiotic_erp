@@ -35,6 +35,9 @@ export function PurchaseOrderModal({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (showConfirm) return
+      const target = event.target as HTMLElement
+      if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
       if (overlayRef.current && event.target === overlayRef.current) {
         onClose()
       }
@@ -42,7 +45,7 @@ export function PurchaseOrderModal({
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [onClose])
+  }, [onClose, showConfirm])
 
   useEffect(() => {
     // Fetch inventories and SKUs for create mode

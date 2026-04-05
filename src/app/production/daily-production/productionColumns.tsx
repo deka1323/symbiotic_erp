@@ -129,13 +129,16 @@ export default function DailyProductionPage() {
   }, [successMessage])
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      if (showConfirm) return
+      const target = e.target as HTMLElement
+      if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
       if (overlayRef.current && e.target === overlayRef.current) setShowAddModal(false)
     }
     if (showAddModal) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showAddModal])
+  }, [showAddModal, showConfirm])
 
   const addItem = () => { setItems([...items, { skuId: '', quantity: '' }]) }
   const updateItem = (idx: number, v: ItemUpdate) => {
