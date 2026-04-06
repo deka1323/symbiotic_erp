@@ -350,13 +350,13 @@ function SKUModal({
   const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : '0')
   const [unit, setUnit] = useState(initial?.unit || 'packets')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const modalRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement
       if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
-      if (modalRef.current && !modalRef.current.contains(target)) {
+      if (overlayRef.current && event.target === overlayRef.current) {
         onClose()
       }
     }
@@ -376,10 +376,13 @@ function SKUModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+    >
       <div
-        ref={modalRef}
         className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-md animate-fade-in"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-900">

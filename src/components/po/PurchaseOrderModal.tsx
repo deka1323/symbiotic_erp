@@ -328,6 +328,7 @@ export function PurchaseOrderModal({
                   .filter((i: any) => i.id !== fromInventory?.id)
                   .map((inv: any) => ({ value: inv.id, label: `${inv.name} (${inv.type})` }))}
                 className="block w-full"
+                menuPortal
               />
             </div>
           </div>
@@ -356,6 +357,7 @@ export function PurchaseOrderModal({
                     placeholder="Select SKU"
                     options={skus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
                     className="flex-1"
+                    menuPortal
                   />
                   <PositiveIntegerInput
                     value={it.requestedQuantity}

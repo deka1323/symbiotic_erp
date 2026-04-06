@@ -50,15 +50,15 @@ export function TransferOrderModal({
   >({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [creatorName, setCreatorName] = useState<string | null>(null)
-  const modalRef = useRef<HTMLDivElement>(null)
+  /** Backdrop only — same as PO modal; avoids closing when portaled menus / overflow hit-testing miss the panel. */
+  const overlayRef = useRef<HTMLDivElement>(null)
 
-  // Close on outside click — ignore portaled SearchableSelect menus and ConfirmDialog (outside modalRef).
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (showConfirm) return
       const target = event.target as HTMLElement
       if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
-      if (modalRef.current && !modalRef.current.contains(target)) {
+      if (overlayRef.current && event.target === overlayRef.current) {
         onClose()
       }
     }
@@ -537,10 +537,13 @@ export function TransferOrderModal({
   // Detail mode UI
   if (mode === 'detail' && to) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+      <div
+        ref={overlayRef}
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+      >
         <div
-          ref={modalRef}
           className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-3xl overflow-auto max-h-[90vh] animate-fade-in"
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
             <h3 className="text-sm font-semibold text-gray-900">Transfer Order Details</h3>
@@ -670,10 +673,13 @@ export function TransferOrderModal({
 
   // Create mode UI (fromPO or manual)
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+    >
       <div
-        ref={modalRef}
         className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-3xl overflow-auto max-h-[90vh] animate-fade-in"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
           <h3 className="text-sm font-semibold text-gray-900">
@@ -716,6 +722,7 @@ export function TransferOrderModal({
                     .filter((i: any) => i.id !== fromInventory?.id)
                     .map((inv: any) => ({ value: inv.id, label: `${inv.name} (${inv.type})` }))}
                   className="block w-full"
+                  menuPortal
                 />
               )}
             </div>
@@ -733,6 +740,7 @@ export function TransferOrderModal({
                 placeholder="Select employee"
                 options={employees.map((emp: any) => ({ value: emp.id, label: `${emp.name} (${emp.code})` }))}
                 className="block w-full"
+                menuPortal
               />
             </div>
           </div>
@@ -794,7 +802,7 @@ export function TransferOrderModal({
                                           className="w-36 px-2 py-1 border border-gray-200 rounded bg-white text-xs"
                                         />
                                         {stockFiltered.length > 0 && !batch.batchId && (
-                                          <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
+                                          <ul data-prevent-modal-dismiss="true" className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
                                             {stockFiltered.slice(0, 10).map((s: any) => (
                                               <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
                                             ))}
@@ -840,6 +848,7 @@ export function TransferOrderModal({
                                   placeholder="Select SKU"
                                   options={remainingSkus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
                                   className="flex-1 min-w-0"
+                                  menuPortal
                                 />
                                 <button type="button" onClick={() => removeNotRequestedRow(idx)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
                               </div>
@@ -871,7 +880,7 @@ export function TransferOrderModal({
                                           className="w-36 px-2 py-1 border border-gray-200 rounded bg-white text-xs"
                                         />
                                         {stockFiltered.length > 0 && !batch.batchId && (
-                                          <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
+                                          <ul data-prevent-modal-dismiss="true" className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
                                             {stockFiltered.slice(0, 10).map((s: any) => (
                                               <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateNotRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateNotRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
                                             ))}
@@ -926,6 +935,7 @@ export function TransferOrderModal({
                             placeholder="Select SKU"
                             options={skus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
                             className="flex-1"
+                            menuPortal
                           />
                           <button type="button" onClick={() => removeItemRow(idx)} disabled={items.length === 1} className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
@@ -958,7 +968,7 @@ export function TransferOrderModal({
                                     className="min-w-[140px] w-36 px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
                                   />
                                   {stockFiltered.length > 0 && !batch.batchId && (
-                                    <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded-lg shadow text-xs">
+                                    <ul data-prevent-modal-dismiss="true" className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded-lg shadow text-xs">
                                       {stockFiltered.slice(0, 10).map((s: any) => (
                                         <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateBatch(idx, batchIdx, 'manualBatchCode', undefined); }}>{s.batch?.batchId ?? s.batchId} (Avail: {s.quantity})</li>
                                       ))}

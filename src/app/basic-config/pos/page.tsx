@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { DataTable, Column, Action } from '@/components/DataTable'
 import { Plus, Store, Users, Link2, CheckCircle, XCircle, Edit } from 'lucide-react'
 import { authFetch } from '@/lib/fetch'
@@ -592,9 +592,23 @@ function POSModal({
   const [currency, setCurrency] = useState(initial?.currency || 'INR')
   const [isActive, setIsActive] = useState(initial?.isActive ?? true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (t.closest?.('[data-prevent-modal-dismiss="true"]')) return
+      if (overlayRef.current && e.target === overlayRef.current) onClose()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [onClose])
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+    >
       <form
         onSubmit={async (e) => {
           e.preventDefault()
@@ -686,9 +700,23 @@ function CreatePOSUserModal({
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (t.closest?.('[data-prevent-modal-dismiss="true"]')) return
+      if (overlayRef.current && e.target === overlayRef.current) onClose()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [onClose])
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+    >
       <form
         onSubmit={async (e) => {
           e.preventDefault()
@@ -700,6 +728,7 @@ function CreatePOSUserModal({
           }
         }}
         className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-md p-4 space-y-3"
+        onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-sm font-semibold text-gray-900">Create POS User ({pos.code})</h3>
         <div>
@@ -743,9 +772,23 @@ function EditMenuItemModal({
   const [price, setPrice] = useState(String(item.menuPrice ?? item.skuPrice))
   const [isActive, setIsActive] = useState(item.menuActive ?? true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (t.closest?.('[data-prevent-modal-dismiss="true"]')) return
+      if (overlayRef.current && e.target === overlayRef.current) onClose()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [onClose])
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+    >
       <form
         onSubmit={async (e) => {
           e.preventDefault()
@@ -757,6 +800,7 @@ function EditMenuItemModal({
           }
         }}
         className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-md p-4 space-y-3"
+        onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-sm font-semibold text-gray-900">Edit Menu Item</h3>
         <div className="text-xs text-gray-600">

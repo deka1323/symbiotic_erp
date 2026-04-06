@@ -159,7 +159,10 @@ export function SearchableSelect({
         </div>
 
         {open && (
-          <ul className="absolute z-50 mt-1 w-full min-w-[160px] max-h-[280px] overflow-y-auto overscroll-contain py-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+          <ul
+            data-prevent-modal-dismiss="true"
+            className="absolute z-50 mt-1 w-full min-w-[160px] max-h-[280px] overflow-y-auto overscroll-contain py-1 bg-white border border-gray-200 rounded-lg shadow-lg"
+          >
             <li>
               <button
                 type="button"
@@ -249,7 +252,7 @@ export function SearchableSelect({
   const dropdownContent = open ? (
     <div
       ref={menuRef}
-      data-prevent-modal-dismiss={menuPortal ? 'true' : undefined}
+      data-prevent-modal-dismiss="true"
       className="flex flex-col bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden min-w-[160px] max-h-[220px]"
       style={menuPortal ? { position: 'fixed' as const, top: menuPosition.top + 4, left: menuPosition.left, width: Math.max(menuPosition.width, 160), zIndex: 9999 } : undefined}
     >
@@ -274,7 +277,10 @@ export function SearchableSelect({
       {open && menuPortal && typeof document !== 'undefined'
         ? createPortal(dropdownContent, document.body)
         : open && (
-            <div className="absolute z-50 mt-1 w-full min-w-[160px] max-h-[220px]">
+            <div
+              className="absolute z-50 mt-1 w-full min-w-[160px] max-h-[220px]"
+              data-prevent-modal-dismiss="true"
+            >
               {dropdownContent}
             </div>
           )}

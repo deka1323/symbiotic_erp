@@ -36,7 +36,7 @@ export function ReceiveOrderModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [creatorName, setCreatorName] = useState<string | null>(null)
-  const modalRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -45,7 +45,7 @@ export function ReceiveOrderModal({
       if (showConfirm) return
       const target = event.target as HTMLElement
       if (target.closest?.('[data-prevent-modal-dismiss="true"]')) return
-      if (modalRef.current && !modalRef.current.contains(target)) {
+      if (overlayRef.current && event.target === overlayRef.current) {
         onClose()
       }
     }
@@ -390,10 +390,13 @@ export function ReceiveOrderModal({
     const toData = ro.transferOrder
 
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+      <div
+        ref={overlayRef}
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+      >
         <div
-          ref={modalRef}
           className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-4xl overflow-auto max-h-[90vh] animate-fade-in"
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
             <h3 className="text-sm font-semibold text-gray-900">Receive Order Details</h3>
@@ -541,10 +544,13 @@ export function ReceiveOrderModal({
   const po = to?.purchaseOrder
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+    >
       <div
-        ref={modalRef}
         className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl animate-fade-in"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
           <h3 className="text-sm font-semibold text-gray-900">
@@ -591,6 +597,7 @@ export function ReceiveOrderModal({
                   placeholder="Select inventory"
                   options={inventories.map((inv: any) => ({ value: inv.id, label: `${inv.name} (${inv.type})` }))}
                   className="block w-full"
+                  menuPortal
                 />
               )}
             </div>
@@ -648,7 +655,7 @@ export function ReceiveOrderModal({
                                         <div className="relative">
                                           <input type="text" value={(batch as any).manualBatchCode ?? ''} onChange={(e) => updateRequestedBatch(idx, batchIdx, 'manualBatchCode', e.target.value)} placeholder="Type batch ID to search" className="w-36 px-2 py-1 border border-gray-200 rounded bg-white text-xs" />
                                           {stockFiltered.length > 0 && (
-                                            <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
+                                            <ul data-prevent-modal-dismiss="true" className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
                                               {stockFiltered.slice(0, 10).map((s: any) => (
                                                 <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateRequestedBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateRequestedBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId}</li>
                                               ))}
@@ -698,6 +705,7 @@ export function ReceiveOrderModal({
                                   placeholder="Select SKU"
                                   options={remainingSkus.map((s: any) => ({ value: s.id, label: `${s.name}${s.code ? ` (${s.code})` : ''}` }))}
                                   className="flex-1 min-w-0"
+                                  menuPortal
                                 />
                                 <button type="button" onClick={() => removeExtraRow(idx)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
                               </div>
@@ -717,7 +725,7 @@ export function ReceiveOrderModal({
                                         <div className="relative">
                                           <input type="text" value={(batch as any).manualBatchCode ?? ''} onChange={(e) => updateExtraBatch(idx, batchIdx, 'manualBatchCode', e.target.value)} placeholder="Type batch ID to search" className="w-36 px-2 py-1 border border-gray-200 rounded bg-white text-xs" />
                                           {stockFiltered.length > 0 && (
-                                            <ul className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
+                                            <ul data-prevent-modal-dismiss="true" className="absolute z-10 mt-0.5 w-44 max-h-40 overflow-auto bg-white border rounded shadow text-[10px]">
                                               {stockFiltered.slice(0, 10).map((s: any) => (
                                                 <li key={s.batch?.id ?? s.batchId} className="px-2 py-1.5 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateExtraBatch(idx, batchIdx, 'batchId', s.batch?.id ?? s.batchId); updateExtraBatch(idx, batchIdx, 'manualBatchCode', ''); }}>{s.batch?.batchId ?? s.batchId}</li>
                                               ))}
@@ -765,6 +773,7 @@ export function ReceiveOrderModal({
                             placeholder="Select SKU"
                             options={skus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
                             className="flex-1"
+                            menuPortal
                           />
                           <button type="button" onClick={() => removeItemRow(idx)} disabled={items.length === 1} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
@@ -778,6 +787,7 @@ export function ReceiveOrderModal({
                                   placeholder="Select Batch"
                                   options={stock.map((s: any) => ({ value: s.batch?.id ?? s.batchId, label: `${s.batch?.batchId ?? s.batchId} (Avail: ${s.quantity})` }))}
                                   className="min-w-[120px]"
+                                  menuPortal
                                 />
                                 <input type="number" min={1} step={1} value={batch.quantity} onChange={(e) => { const v = Math.floor(Number(e.target.value)); updateBatch(idx, batchIdx, 'quantity', Math.max(1, isNaN(v) ? 1 : v)); }} className="w-24 px-3 py-1.5 text-xs border rounded-lg bg-white" />
                                 <button type="button" onClick={() => removeBatchFromItem(idx, batchIdx)} disabled={it.batches.length === 1} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>

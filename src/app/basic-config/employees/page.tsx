@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { DataTable, Column, Action } from '@/components/DataTable'
 import { authFetch } from '@/lib/fetch'
 
@@ -23,6 +23,30 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Employee | null>(null)
+  const createOverlayRef = useRef<HTMLDivElement>(null)
+  const editOverlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showCreate) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (t.closest?.('[data-prevent-modal-dismiss="true"]')) return
+      if (createOverlayRef.current && e.target === createOverlayRef.current) setShowCreate(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [showCreate])
+
+  useEffect(() => {
+    if (!editing) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (t.closest?.('[data-prevent-modal-dismiss="true"]')) return
+      if (editOverlayRef.current && e.target === editOverlayRef.current) setEditing(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [editing])
 
   const fetchItems = async () => {
     try {
@@ -148,8 +172,11 @@ export default function EmployeesPage() {
       </div>
 
       {showCreate && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded shadow-lg w-[520px]">
+        <div
+          ref={createOverlayRef}
+          className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 p-4"
+        >
+          <div className="bg-white p-4 rounded shadow-lg w-[520px]" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">Create Employee</h3>
             <EmployeeForm onSave={handleCreate} onCancel={() => setShowCreate(false)} />
           </div>
@@ -157,8 +184,11 @@ export default function EmployeesPage() {
       )}
 
       {editing && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded shadow-lg w-[520px]">
+        <div
+          ref={editOverlayRef}
+          className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 p-4"
+        >
+          <div className="bg-white p-4 rounded shadow-lg w-[520px]" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">Edit Employee</h3>
             <EmployeeForm initial={editing} onSave={(p) => handleUpdate(editing.id, p)} onCancel={() => setEditing(null)} />
           </div>
