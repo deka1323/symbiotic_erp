@@ -20,12 +20,26 @@ const createBatchSchema = z.object({
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Temporary safety backfill for older rows created before `production_day` enforcement.
+ * Prevents Prisma P2032 (non-null field mapped to null DB value) on list/create paths.
+ */
+async function backfillNullProductionDay() {
+  await prisma.$executeRaw`
+    UPDATE "batches"
+    SET "production_day" = ((("production_date" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata')::date)
+    WHERE "production_day" IS NULL
+  `
+}
+
 // GET /api/production/batches - list batches
 export async function GET(req: NextRequest) {
   const authResult = await authorize(req, 'production', 'daily-production:list_table', 'view')
   if ('error' in authResult) return authResult.error
 
   try {
+    await backfillNullProductionDay()
+
     const { searchParams } = new URL(req.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
     const rawSize = parseInt(searchParams.get('pageSize') || '10', 10)
@@ -68,6 +82,8 @@ export async function POST(req: NextRequest) {
   if ('error' in authResult) return authResult.error
 
   try {
+    await backfillNullProductionDay()
+
     const body = await req.json()
     const validated = createBatchSchema.parse(body)
 
