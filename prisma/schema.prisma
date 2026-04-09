@@ -305,11 +305,11 @@ model Employee {
 
 model Batch {
   id             String   @id @default(uuid())
-  /** Human-readable batch code; unique together with inventory (same code allowed across inventories). */
+  // Human-readable batch code; unique with inventory (same code allowed across inventories).
   batchId        String   @db.VarChar(50)
   inventoryId    String   @map("inventory_id")
   productionDate DateTime @map("production_date")
-  /** Calendar day (IST, stored as date) for this production batch; one row per inventory per day. */
+  // IST calendar day stored as date; one row per inventory per day.
   productionDay  DateTime @map("production_day") @db.Date
   createdById    String?  @map("created_by_id")
   createdAt      DateTime @default(now()) @map("created_at")
