@@ -18,6 +18,8 @@ const createBatchSchema = z.object({
   ),
 })
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/production/batches - list batches
 export async function GET(req: NextRequest) {
   const authResult = await authorize(req, 'production', 'daily-production:list_table', 'view')
@@ -25,8 +27,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url)
-    const page = parseInt(searchParams.get('page') || '1')
-    const pageSize = parseInt(searchParams.get('pageSize') || '10')
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
+    const rawSize = parseInt(searchParams.get('pageSize') || '10', 10)
+    const pageSize = Math.min(500, Math.max(1, Number.isFinite(rawSize) ? rawSize : 10))
     const inventoryId = searchParams.get('inventoryId') || ''
 
     const where: any = {}
@@ -46,10 +49,13 @@ export async function GET(req: NextRequest) {
       prisma.batch.count({ where }),
     ])
 
-    return NextResponse.json({
-      data: batches,
-      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-    })
+    return NextResponse.json(
+      {
+        data: batches,
+        pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      },
+      { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+    )
   } catch (error) {
     console.error('Get batches error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -276,13 +276,18 @@ export function DataTable<T extends Record<string, any>>({
                       )}
                       {effectiveColumns.map((col) => (
                         <td key={col.key} className={`${cellPad} ${textSize} text-gray-900 border-r border-gray-100 last:border-r-0 align-top`}>
-                          {col.key === '__serial__'
-                            ? (effectivePage - 1) * pageSize + idx + 1
-                            : col.subRender
-                              ? col.subRender(row)
-                              : col.render
-                                ? col.render(row)
-                                : row[col.key]}
+                          {col.key === '__serial__' ? (
+                            (effectivePage - 1) * pageSize + idx + 1
+                          ) : col.render || col.subRender ? (
+                            <div className="space-y-1">
+                              {col.render ? col.render(row) : null}
+                              {col.subRender ? (
+                                <div className={col.render ? 'pt-0.5 border-t border-gray-100/80' : ''}>{col.subRender(row)}</div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            row[col.key]
+                          )}
                         </td>
                       ))}
                       {actions.length > 0 && (

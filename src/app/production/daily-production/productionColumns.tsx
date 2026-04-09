@@ -31,6 +31,7 @@ export function getProductionColumns(): Column<BatchForColumn>[] {
     {
       key: 'batchItems',
       header: 'Items & quantities',
+      sortable: false,
       render: (r) =>
         (r.batchItems || []).map((bi) => `${bi.sku?.name || bi.sku?.code || bi.skuId}: ${bi.quantity}`).join('; ') || '-',
       subRender: (r) => {
@@ -106,12 +107,24 @@ export default function DailyProductionPage() {
     if (!selectedInventory) { setBatches([]); setIsLoading(false); return }
     try {
       setIsLoading(true)
-      const res = await authFetch(`/api/production/batches?inventoryId=${selectedInventory.id}`)
-      const data = await res.json()
-      setBatches(data.data || [])
+      setErrorMessage(null)
+      const params = new URLSearchParams({
+        inventoryId: selectedInventory.id,
+        page: '1',
+        pageSize: '200',
+      })
+      const res = await authFetch(`/api/production/batches?${params.toString()}`, { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setBatches([])
+        setErrorMessage(typeof data.error === 'string' ? data.error : 'Failed to load production history.')
+        return
+      }
+      setBatches(Array.isArray(data.data) ? data.data : [])
     } catch (err) {
       console.error(err)
       setBatches([])
+      setErrorMessage('Failed to load production history.')
     } finally {
       setIsLoading(false)
     }
@@ -226,6 +239,11 @@ export default function DailyProductionPage() {
       {successMessage && (
         <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           <CheckCircle className="w-4 h-4" /> <span>{successMessage}</span>
+        </div>
+      )}
+      {errorMessage && selectedInventory && !showAddModal && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <AlertCircle className="w-4 h-4 shrink-0" /> <span>{errorMessage}</span>
         </div>
       )}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
