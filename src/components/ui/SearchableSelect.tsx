@@ -44,6 +44,8 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0 })
+  const [openUpward, setOpenUpward] = useState(false)
+  const [menuMaxHeight, setMenuMaxHeight] = useState(220)
   const containerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -55,8 +57,22 @@ export function SearchableSelect({
   const updateMenuPosition = () => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect()
+      const viewportHeight = window.innerHeight
+      const preferredMenuHeight = 220
+      const safeMargin = 12
+      const gap = 4
+      const spaceBelow = viewportHeight - rect.bottom - safeMargin
+      const spaceAbove = rect.top - safeMargin
+      const shouldOpenUpward = spaceBelow < 140 && spaceAbove > spaceBelow
+      const dynamicMaxHeight = Math.max(
+        140,
+        Math.min(preferredMenuHeight, shouldOpenUpward ? spaceAbove - gap : spaceBelow - gap)
+      )
+
+      setOpenUpward(shouldOpenUpward)
+      setMenuMaxHeight(dynamicMaxHeight)
       setMenuPosition({
-        top: rect.bottom,
+        top: shouldOpenUpward ? rect.top - gap : rect.bottom + gap,
         left: rect.left,
         width: rect.width,
       })
@@ -106,7 +122,7 @@ export function SearchableSelect({
   }, [open, menuPortal])
 
   const handleSelect = (val: string) => {
-    if (menuPortal && typeof window !== 'undefined') {
+      if (menuPortal && typeof window !== 'undefined') {
       (window as any).__suppressNextHeaderDropdownClick = true
       setTimeout(() => { (window as any).__suppressNextHeaderDropdownClick = false }, 150)
     }
@@ -213,7 +229,7 @@ export function SearchableSelect({
           className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
         />
       </div>
-      <ul className="overflow-y-auto overscroll-contain flex-1 py-1 max-h-[180px]">
+      <ul className="overflow-y-auto overscroll-contain flex-1 py-1">
         <li>
           <button
             type="button"
@@ -254,7 +270,19 @@ export function SearchableSelect({
       ref={menuRef}
       data-prevent-modal-dismiss="true"
       className="flex flex-col bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden min-w-[160px] max-h-[220px]"
-      style={menuPortal ? { position: 'fixed' as const, top: menuPosition.top + 4, left: menuPosition.left, width: Math.max(menuPosition.width, 160), zIndex: 9999 } : undefined}
+      style={
+        menuPortal
+          ? {
+              position: 'fixed' as const,
+              top: openUpward ? undefined : menuPosition.top,
+              bottom: openUpward ? Math.max(window.innerHeight - menuPosition.top, 0) : undefined,
+              left: menuPosition.left,
+              width: Math.max(menuPosition.width, 160),
+              maxHeight: menuMaxHeight,
+              zIndex: 9999,
+            }
+          : undefined
+      }
     >
       {dropdownInner}
     </div>

@@ -9,6 +9,7 @@ import { authFetch } from '@/lib/fetch'
 import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
+import { formatSiteDateAndTime, formatSiteNumber } from '@/lib/dates'
 
 export default function ManageStockPage() {
   const { selectedInventory } = useInventoryContext()
@@ -298,7 +299,7 @@ export default function ManageStockPage() {
       header: 'Date',
       render: (r) => (
         <div className="text-xs text-gray-600">
-          {new Date(r.createdAt).toLocaleDateString()} {new Date(r.createdAt).toLocaleTimeString()}
+          {formatSiteDateAndTime(r.createdAt)}
         </div>
       ),
     },
@@ -382,7 +383,7 @@ export default function ManageStockPage() {
             </div>
             <div className="text-right">
               <p className="text-2xl font-bold tabular-nums text-gray-900">
-                {stocks.reduce((sum, s) => sum + (s.totalQuantity || 0), 0).toLocaleString()}
+                {formatSiteNumber(stocks.reduce((sum, s) => sum + (s.totalQuantity || 0), 0))}
               </p>
               <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">units</p>
             </div>

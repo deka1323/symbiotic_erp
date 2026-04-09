@@ -6,6 +6,7 @@ import { authFetch } from '@/lib/fetch'
 import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
+import { formatSiteDateAndTime } from '@/lib/dates'
 
 export function ReceiveOrderModal({
   mode,
@@ -466,7 +467,7 @@ export function ReceiveOrderModal({
                   Created At
                 </div>
                 <div className="text-xs text-gray-900">
-                  {new Date(ro.createdAt).toLocaleDateString()} {new Date(ro.createdAt).toLocaleTimeString()}
+                  {formatSiteDateAndTime(ro.createdAt)}
                 </div>
               </div>
               <div className="space-y-1">
@@ -549,7 +550,7 @@ export function ReceiveOrderModal({
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl animate-fade-in"
+        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-hidden animate-fade-in flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
@@ -563,7 +564,7 @@ export function ReceiveOrderModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 overflow-y-auto overscroll-contain">
           {/* TO/PO Info for fromTO mode */}
           {isFromTO && to && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
@@ -805,7 +806,7 @@ export function ReceiveOrderModal({
             )}
           </div>
         </div>
-        <div className="px-4 py-3 border-t border-gray-200/80 bg-gray-50/50 flex justify-end gap-2">
+        <div className="px-4 py-3 border-t border-gray-200/80 bg-gray-50/50 flex justify-end gap-2 shrink-0">
           <button
             onClick={onClose}
             disabled={isSubmitting}

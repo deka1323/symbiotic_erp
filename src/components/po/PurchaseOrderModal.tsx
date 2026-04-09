@@ -6,6 +6,7 @@ import { authFetch } from '@/lib/fetch'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
+import { formatSiteDateAndTime } from '@/lib/dates'
 
 export function PurchaseOrderModal({
   mode,
@@ -222,7 +223,7 @@ export function PurchaseOrderModal({
                   Created At
                 </div>
                 <div className="text-xs text-gray-900">
-                  {new Date(po.createdAt).toLocaleDateString()} {new Date(po.createdAt).toLocaleTimeString()}
+                  {formatSiteDateAndTime(po.createdAt)}
                 </div>
               </div>
               <div className="space-y-1">
@@ -293,7 +294,7 @@ export function PurchaseOrderModal({
   return (
     <div ref={overlayRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
       <div
-        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl animate-fade-in"
+        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-hidden animate-fade-in flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
@@ -305,7 +306,7 @@ export function PurchaseOrderModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 overflow-y-auto overscroll-contain">
           {/* Inventory Selection */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -379,7 +380,7 @@ export function PurchaseOrderModal({
             </div>
           </div>
         </div>
-        <div className="px-4 py-3 border-t border-gray-200/80 bg-gray-50/50 flex justify-end gap-2">
+        <div className="px-4 py-3 border-t border-gray-200/80 bg-gray-50/50 flex justify-end gap-2 shrink-0">
           <button
             onClick={onClose}
             disabled={isSubmitting}

@@ -37,7 +37,10 @@ export async function GET(req: NextRequest) {
       if (isUuid) {
         where.batchId = batchId
       } else {
-        const batchRow = await prisma.batch.findFirst({ where: { batchId }, select: { id: true } })
+        const batchRow = await prisma.batch.findFirst({
+          where: { inventoryId, batchId },
+          select: { id: true },
+        })
         if (batchRow) where.batchId = batchRow.id
       }
     }

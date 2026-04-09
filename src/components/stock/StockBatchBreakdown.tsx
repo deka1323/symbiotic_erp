@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, Package } from 'lucide-react'
+import { formatSiteDate } from '@/lib/dates'
 
 interface BatchInfo {
   batchId: string
@@ -101,7 +102,7 @@ export function StockBatchBreakdown({
                   <span className="font-semibold text-gray-900">{batch.quantity}</span>
                   {batch.batch?.productionDate && (
                     <span className="text-gray-400">
-                      ({new Date(batch.batch.productionDate).toLocaleDateString()})
+                      ({formatSiteDate(batch.batch.productionDate)})
                     </span>
                   )}
                   {onEdit && (

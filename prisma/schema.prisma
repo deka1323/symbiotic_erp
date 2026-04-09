@@ -305,9 +305,12 @@ model Employee {
 
 model Batch {
   id             String   @id @default(uuid())
-  batchId        String   @unique @db.VarChar(50)
+  /** Human-readable batch code; unique together with inventory (same code allowed across inventories). */
+  batchId        String   @db.VarChar(50)
   inventoryId    String   @map("inventory_id")
   productionDate DateTime @map("production_date")
+  /** Calendar day (IST, stored as date) for this production batch; one row per inventory per day. */
+  productionDay  DateTime @map("production_day") @db.Date
   createdById    String?  @map("created_by_id")
   createdAt      DateTime @default(now()) @map("created_at")
 
@@ -321,9 +324,12 @@ model Batch {
   roItems       ROItem[]
   billLineBatches BillLineBatch[]
 
+  @@unique([inventoryId, productionDay])
+  @@unique([inventoryId, batchId])
   @@index([batchId])
   @@index([inventoryId])
   @@index([productionDate])
+  @@index([productionDay])
   @@index([createdById])
   @@map("batches")
 }

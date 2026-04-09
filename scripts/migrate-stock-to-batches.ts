@@ -25,6 +25,7 @@ async function main() {
         batchId: 'LEGACY',
         inventoryId: productionInventory.id,
         productionDate: new Date('2000-01-01'), // Old date to indicate legacy
+        productionDay: new Date(Date.UTC(2000, 0, 1)),
       },
     })
     console.log('✅ Created LEGACY batch')

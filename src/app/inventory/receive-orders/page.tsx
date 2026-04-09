@@ -9,6 +9,7 @@ import { Plus, Package, CheckCircle, XCircle, AlertCircle, Search, Calendar } fr
 import { PermissionGate } from '@/components/PermissionGate'
 import { authFetch } from '@/lib/fetch'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
+import { formatSiteDateAndTime } from '@/lib/dates'
 
 const DEBOUNCE_MS = 300
 
@@ -255,7 +256,7 @@ export default function ReceiveOrdersPage() {
       header: 'Created At',
       render: (r) => (
         <div className="text-xs text-gray-600">
-          {new Date(r.createdAt).toLocaleDateString()} {new Date(r.createdAt).toLocaleTimeString()}
+          {formatSiteDateAndTime(r.createdAt)}
         </div>
       ),
     },

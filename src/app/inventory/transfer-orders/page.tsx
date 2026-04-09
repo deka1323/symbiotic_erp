@@ -8,6 +8,7 @@ import { PurchaseOrderModal } from '@/components/po/PurchaseOrderModal'
 import { PermissionGate } from '@/components/PermissionGate'
 import { authFetch } from '@/lib/fetch'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
+import { formatSiteDateAndTime } from '@/lib/dates'
 import { Plus, AlertCircle, Clock, Search, Calendar } from 'lucide-react'
 
 const DEBOUNCE_MS = 300
@@ -277,7 +278,7 @@ export default function TransferOrdersPage() {
       header: 'Created At',
       render: (row) => (
         <span className="text-xs text-gray-600">
-          {new Date(row.createdAt).toLocaleDateString()} {new Date(row.createdAt).toLocaleTimeString()}
+          {formatSiteDateAndTime(row.createdAt)}
         </span>
       ),
     },

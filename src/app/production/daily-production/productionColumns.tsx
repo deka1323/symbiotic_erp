@@ -8,6 +8,7 @@ import { authFetch } from '@/lib/fetch'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
+import { formatSiteDate, formatSiteDateTime } from '@/lib/dates'
 
 export interface BatchForColumn {
   id: string
@@ -25,7 +26,7 @@ export function getProductionColumns(): Column<BatchForColumn>[] {
       header: 'Date',
       sortable: true,
       sortValue: (r) => new Date(r.productionDate).getTime(),
-      render: (r) => new Date(r.productionDate).toLocaleDateString(),
+      render: (r) => formatSiteDate(r.productionDate),
     },
     {
       key: 'batchItems',
@@ -68,7 +69,7 @@ export function getProductionColumns(): Column<BatchForColumn>[] {
       header: 'Created At',
       sortable: true,
       sortValue: (r) => (r as any).createdAt ? new Date((r as any).createdAt).getTime() : 0,
-      render: (r) => (r as any).createdAt ? new Date((r as any).createdAt).toLocaleString() : '-',
+      render: (r) => ((r as any).createdAt ? formatSiteDateTime((r as any).createdAt) : '-'),
     },
   ]
 }
@@ -177,14 +178,22 @@ export default function DailyProductionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inventoryId: selectedInventory.id, items: parsed }),
       })
+      const payload = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to create batch')
+        throw new Error(
+          typeof payload.error === 'string' ? payload.error : payload.error?.[0]?.message || 'Failed to add production stock'
+        )
       }
+      const batch = payload.data
+      const reused = payload.reused === true
       setItems([])
       setShowAddModal(false)
       fetchBatches()
-      setSuccessMessage('Batch created successfully and stock added.')
+      setSuccessMessage(
+        reused
+          ? `Stock added to today's batch ${batch?.batchId ?? ''}.`
+          : `Daily batch ${batch?.batchId ?? ''} created and stock added.`
+      )
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to create batch')
     } finally {
@@ -200,7 +209,9 @@ export default function DailyProductionPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-gray-900">Daily Production</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Add production stock by creating a batch. Stock is added to the selected inventory.</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            One production batch per inventory per day (code: YY/SFPL/...). Further entries the same day add stock to that batch.
+          </p>
         </div>
         <button type="button" onClick={openAddModal} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
           <Plus className="w-4 h-4" /> Add production stock
@@ -234,7 +245,9 @@ export default function DailyProductionPage() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white"><Package className="w-5 h-5" /></div>
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900">Add production stock</h3>
-                  <p className="text-[11px] text-gray-500">Add SKUs and quantities, then create a batch to add stock to {selectedInventory?.name || 'selected inventory'}.</p>
+                  <p className="text-[11px] text-gray-500">
+                    Add SKUs and quantities. If today&apos;s batch already exists for this inventory, stock is added to it; otherwise it is created (batch code YY/SFPL/monthCode+day).
+                  </p>
                 </div>
               </div>
               <button type="button" onClick={() => setShowAddModal(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
@@ -280,7 +293,7 @@ export default function DailyProductionPage() {
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-200 bg-gray-50/50">
               <button type="button" onClick={() => setShowAddModal(false)} className="px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
               <button type="button" onClick={requestCreateBatch} disabled={isSubmitting || items.length === 0 || items.some((it) => !it.skuId || parsePositiveInteger(it.quantity) == null)} className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                {isSubmitting ? (<><span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Creating...</>) : (<><CheckCircle className="w-3.5 h-3.5" /> Create batch & add stock</>)}
+                {isSubmitting ? (<><span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>) : (<><CheckCircle className="w-3.5 h-3.5" /> Add stock to daily batch</>)}
               </button>
             </div>
           </div>
@@ -291,7 +304,7 @@ export default function DailyProductionPage() {
         title="Confirm add production stock"
         onConfirm={createBatch}
         onCancel={() => setShowConfirm(false)}
-        confirmLabel="Create batch & add stock"
+        confirmLabel="Add stock to daily batch"
         loading={isSubmitting}
       >
         <div className="text-xs text-gray-700 space-y-1">

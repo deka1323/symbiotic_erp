@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 import argon2 from 'argon2'
 import { inheritRolePermissionsToUser } from '../src/lib/acl/inheritPermissions'
+import { formatProductionBatchCode } from '../src/lib/production/production-batch'
+import { toSiteDateOnly } from '../src/lib/dates'
 
 const prisma = new PrismaClient()
 
@@ -668,11 +670,14 @@ async function main() {
   console.log('📊 Initializing stock for inventories and SKUs...')
   const batchByInvId = new Map<string, string>()
   for (const inv of createdInventories) {
+    const productionInstant = new Date()
+    const productionDay = toSiteDateOnly(productionInstant)
     const batch = await prisma.batch.create({
       data: {
-        batchId: `INIT-${inv.code}-${Date.now().toString(36)}`,
+        batchId: formatProductionBatchCode(productionDay),
         inventoryId: inv.id,
-        productionDate: new Date(),
+        productionDate: productionInstant,
+        productionDay,
       },
     })
     batchByInvId.set(inv.id, batch.id)
@@ -701,16 +706,11 @@ async function main() {
   // 16. Create a sample production batch and add batch items (adds to stock)
   console.log('🧪 Creating a sample production batch in production inventory...')
   if (productionInventory) {
-    const batchId = `BATCH-${Date.now().toString().slice(-6)}`
-    const batch = await prisma.batch.create({
-      data: {
-        batchId,
-        inventoryId: productionInventory.id,
-        productionDate: new Date(),
-      },
+    const batch = await prisma.batch.findUniqueOrThrow({
+      where: { id: batchByInvId.get(productionInventory.id)! },
     })
 
-    // Add items to batch and update stock (transactional)
+    // Add items to the same daily batch as stock init (one batch per inventory per day)
     const batchItems = [
       { sku: createdSkus[0], quantity: 20 },
       { sku: createdSkus[1], quantity: 15 },
@@ -718,15 +718,12 @@ async function main() {
 
     await prisma.$transaction(async (tx) => {
       for (const item of batchItems) {
-        await tx.batchItem.create({
-          data: {
-            batchId: batch.id,
-            skuId: item.sku.id,
-            quantity: item.quantity,
-          },
+        await tx.batchItem.upsert({
+          where: { batchId_skuId: { batchId: batch.id, skuId: item.sku.id } },
+          create: { batchId: batch.id, skuId: item.sku.id, quantity: item.quantity },
+          update: { quantity: { increment: item.quantity } },
         })
 
-        // Upsert stock record to add produced quantity
         await tx.stock.upsert({
           where: { inventoryId_skuId_batchId: { inventoryId: productionInventory.id, skuId: item.sku.id, batchId: batch.id } },
           update: { quantity: { increment: item.quantity } },
@@ -734,7 +731,7 @@ async function main() {
         })
       }
     })
-    console.log(`✅ Created batch ${batch.batchId} and updated stock in production inventory`)
+    console.log(`✅ Added sample production items to batch ${batch.batchId} in production inventory`)
   }
 
   console.log('\n✅ Seed completed successfully!')
@@ -746,7 +743,7 @@ async function main() {
   console.log(`   - Employees created/ensured: ${createdEmployees.length}`)
   console.log(`   - Manager users created/ensured: 3`)
   console.log(`   - Sample stock initialized for all inventories and SKUs`)
-  console.log(`   - Sample batch created in production inventory (if available)`)
+  console.log(`   - Sample production items added to daily batch in production inventory (if available)`)
 }
 
 main()
