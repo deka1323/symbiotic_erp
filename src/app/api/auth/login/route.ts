@@ -14,9 +14,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
-    // Find user
+    // Find user (include roles for client; passwordHash only for verify)
     const user = await prisma.user.findUnique({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        fullName: true,
+        passwordHash: true,
+        isActive: true,
+        userRoles: {
+          select: {
+            role: { select: { code: true } },
+          },
+        },
+      },
     })
 
     if (!user || !user.isActive) {
@@ -73,6 +86,8 @@ export async function POST(req: NextRequest) {
       path: '/',
     })
 
+    const roleCodes = user.userRoles.map((ur) => ur.role.code)
+
     return NextResponse.json({
       accessToken,
       user: {
@@ -80,6 +95,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         username: user.username,
         fullName: user.fullName,
+        roleCodes,
       },
     })
   } catch (error) {

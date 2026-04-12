@@ -2,12 +2,15 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 
-interface User {
+export interface User {
   id: string
   email: string
   username?: string | null
   fullName?: string | null
   isActive?: boolean
+  createdAt?: string
+  /** Role codes from assigned roles (e.g. `admin`). */
+  roleCodes?: string[]
 }
 
 interface AuthState {
@@ -90,7 +93,9 @@ export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue 
     }
 
     const data = await response.json()
-    return data.user
+    const user = data.user as User
+    localStorage.setItem('user', JSON.stringify(user))
+    return user
   } catch (error) {
     console.error('getMe error:', error)
     return rejectWithValue('Network error')

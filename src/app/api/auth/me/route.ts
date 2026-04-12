@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
     const { user } = authResult
 
-    // Get user details
+    // Get user details and role codes
     const userData = await prisma.user.findUnique({
       where: { id: user.userId },
       select: {
@@ -23,6 +23,11 @@ export async function GET(req: NextRequest) {
         fullName: true,
         isActive: true,
         createdAt: true,
+        userRoles: {
+          select: {
+            role: { select: { code: true } },
+          },
+        },
       },
     })
 
@@ -30,7 +35,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ user: userData })
+    const { userRoles, ...rest } = userData
+    const roleCodes = userRoles.map((ur) => ur.role.code)
+
+    return NextResponse.json({ user: { ...rest, roleCodes } })
   } catch (error) {
     console.error('Get me error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

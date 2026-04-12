@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useInventoryContext } from '@/contexts/InventoryContext'
+import { useAuth } from '@/hooks/useAuth'
 import { authFetch } from '@/lib/fetch'
+import { ADMIN_ROLE_CODE } from '@/lib/auth/roles'
 import { ChevronDown } from 'lucide-react'
 
 type InvRow = {
@@ -14,6 +16,7 @@ type InvRow = {
 }
 
 export function InventorySelector() {
+  const { user } = useAuth()
   const {
     selectedInventory,
     availableInventories,
@@ -22,6 +25,8 @@ export function InventorySelector() {
     setIsAdminSite,
     isLoading,
   } = useInventoryContext()
+
+  const isAdminRole = (user?.roleCodes ?? []).includes(ADMIN_ROLE_CODE)
 
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -106,7 +111,11 @@ export function InventorySelector() {
           title="Select Inventory"
         >
           <div className="text-sm font-medium text-gray-800">
-            {isAdminSite ? 'Admin Site' : selectedInventory ? selectedInventory.name : 'Select Inventory'}
+            {isAdminSite && isAdminRole
+              ? 'Admin Site'
+              : selectedInventory
+                ? selectedInventory.name
+                : 'Select Inventory'}
           </div>
           <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
@@ -115,16 +124,18 @@ export function InventorySelector() {
             className="absolute mt-1 w-80 max-w-[calc(100vw-2rem)] bg-white rounded shadow-lg border border-gray-200 z-[100] flex flex-col overflow-hidden"
             data-prevent-modal-dismiss="true"
           >
-            <div className="p-2 shrink-0 border-b border-gray-100">
-              <button
-                onClick={handleSelectAdminSite}
-                className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${
-                  isAdminSite ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'
-                }`}
-              >
-                Admin Site
-              </button>
-            </div>
+            {isAdminRole && (
+              <div className="p-2 shrink-0 border-b border-gray-100">
+                <button
+                  onClick={handleSelectAdminSite}
+                  className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${
+                    isAdminSite ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  Admin Site
+                </button>
+              </div>
+            )}
             <div className="px-2 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
               Inventories
             </div>

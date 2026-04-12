@@ -33,8 +33,10 @@ export function useAuth() {
         const parsedUser = JSON.parse(storedUser)
         // Set credentials from localStorage first
         dispatch(setCredentials({ accessToken: storedToken, user: parsedUser }))
-        // Optionally fetch fresh user data (commented out to prevent excessive calls)
-        // dispatch(getMe())
+        // Backfill roleCodes (and other profile fields) for sessions saved before API returned roles
+        if (!Array.isArray(parsedUser.roleCodes)) {
+          void dispatch(getMe())
+        }
       } catch (error) {
         console.error('Error parsing stored user:', error)
         localStorage.removeItem('accessToken')

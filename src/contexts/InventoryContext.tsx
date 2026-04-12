@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { authFetch } from '@/lib/fetch'
+import { ADMIN_ROLE_CODE } from '@/lib/auth/roles'
 
 interface Inventory {
   id: string
@@ -48,6 +49,21 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       setIsAdminSiteState(storedAdminSite)
     }
   }, [])
+
+  // Drop stale Admin Site mode for users without the admin role (e.g. old localStorage)
+  useEffect(() => {
+    if (
+      user != null &&
+      Array.isArray(user.roleCodes) &&
+      !user.roleCodes.includes(ADMIN_ROLE_CODE) &&
+      isAdminSite
+    ) {
+      setIsAdminSiteState(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('isAdminSite', 'false')
+      }
+    }
+  }, [user, isAdminSite])
 
   // Fetch user's accessible inventories
   const refreshInventories = async () => {
