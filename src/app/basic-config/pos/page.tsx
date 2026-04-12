@@ -22,6 +22,7 @@ interface POSItem {
   timezone: string
   currency: string
   isActive: boolean
+  enforceBatchSkuValidation?: boolean
   inventory?: {
     id: string
     code: string
@@ -591,6 +592,9 @@ function POSModal({
   const [timezone, setTimezone] = useState(initial?.timezone || 'Asia/Kolkata')
   const [currency, setCurrency] = useState(initial?.currency || 'INR')
   const [isActive, setIsActive] = useState(initial?.isActive ?? true)
+  const [enforceBatchSkuValidation, setEnforceBatchSkuValidation] = useState(
+    initial?.enforceBatchSkuValidation ?? true
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -614,7 +618,15 @@ function POSModal({
           e.preventDefault()
           setIsSubmitting(true)
           try {
-            await onSave({ code, name, linkedInventoryId, timezone, currency, isActive })
+            await onSave({
+              code,
+              name,
+              linkedInventoryId,
+              timezone,
+              currency,
+              isActive,
+              ...(!!initial ? { enforceBatchSkuValidation } : {}),
+            })
           } finally {
             setIsSubmitting(false)
           }
@@ -663,10 +675,27 @@ function POSModal({
           </div>
         </div>
         {!!initial && (
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-            Active
-          </label>
+          <>
+            <label className="inline-flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+              Active
+            </label>
+            <label className="flex items-start gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={enforceBatchSkuValidation}
+                onChange={(e) => setEnforceBatchSkuValidation(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-gray-900">Require batch–SKU validation on POS</span>
+                <span className="block text-[11px] text-gray-500 mt-0.5">
+                  When enabled, manually entered batch IDs must be linked to the SKU in production. When disabled, only
+                  the batch ID format is checked and the line can be added without that link.
+                </span>
+              </span>
+            </label>
+          </>
         )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs border rounded-lg">

@@ -590,6 +590,7 @@ model POS {
   timezone          String   @default("Asia/Kolkata") @db.VarChar(100)
   currency          String   @default("INR") @db.VarChar(10)
   isActive          Boolean  @default(true) @map("is_active")
+  enforceBatchSkuValidation Boolean @default(true) @map("enforce_batch_sku_validation")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

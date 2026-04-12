@@ -24,6 +24,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         isActive: typeof body.isActive === 'boolean' ? body.isActive : undefined,
         timezone: typeof body.timezone === 'string' ? body.timezone : undefined,
         currency: typeof body.currency === 'string' ? body.currency : undefined,
+        enforceBatchSkuValidation:
+          typeof body.enforceBatchSkuValidation === 'boolean' ? body.enforceBatchSkuValidation : undefined,
       },
       include: {
         users: {
