@@ -313,6 +313,8 @@ model Batch {
   productionDay  DateTime @map("production_day") @db.Date
   createdById    String?  @map("created_by_id")
   createdAt      DateTime @default(now()) @map("created_at")
+  remark         String?  @db.VarChar(255)
+  bypassByInventoryId   String?  @map("bypass_by_inventory_id") @db.VarChar(255)
 
   // Relations
   inventory     Inventory     @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
