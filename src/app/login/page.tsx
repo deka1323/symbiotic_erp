@@ -142,15 +142,6 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-
-        {/* Demo credentials */}
-        <div className="mt-5 p-3 bg-gray-50 border border-gray-200 rounded-md">
-          <p className="text-xs font-medium text-gray-900 mb-1.5">Demo Credentials:</p>
-          <p className="text-[10px] text-gray-700">
-            Email: <span className="font-mono">admin@erp.com</span><br />
-            Password: <span className="font-mono">Admin@123</span>
-          </p>
-        </div>
       </div>
     </div>
   )
