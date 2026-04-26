@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Pork Momo 10 Pcs",
+    "batchId": "26/SFPL/D19",
+    "amount": "10"
+  },
+  {
+    "name": "Shredded Pickle 150 gm",
+    "batchId": "26/SFPL/D22",
+    "amount": "17"
+  },
+  {
+    "name": "Pork Pickle 180 Gm (with Bambooshoot)",
+    "batchId": "26/SFPL/D22",
+    "amount": "20"
+  },
+  {
+    "name": "Pork Pickle 180 Gm",
+    "batchId": "26/SFPL/D22",
+    "amount": "20"
+  },
+  {
+    "name": "Chicken Lollipop 6 Pcs",
+    "batchId": "26/SFPL/D22",
+    "amount": "10"
+  },
+  {
+    "name": "Chicken Momo 10 Pcs",
+    "batchId": "26/SFPL/D19",
+    "amount": "10"
+  },
+  {
+    "name": "Pork Curry Cut 250 Gm",
+    "batchId": "26/SFPL/D22",
+    "amount": "20"
+  }
+]
