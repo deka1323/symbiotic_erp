@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, ScanLine } from 'lucide-react'
 import { authFetch } from '@/lib/fetch'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
@@ -22,6 +22,7 @@ interface TransferOrderModalProps {
 
 export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCreated, onError }: TransferOrderModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
+  const scannerInputRef = useRef<HTMLInputElement>(null)
   const [inventories, setInventories] = useState<any[]>([])
   const [skus, setSkus] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
@@ -31,6 +32,9 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
+  const [scanMode, setScanMode] = useState(false)
+  const [scanCode, setScanCode] = useState('')
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null)
 
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
@@ -68,6 +72,49 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
   const removeRow = (idx: number) => setItems((s) => s.filter((_, i) => i !== idx))
   const updateRow = (idx: number, next: Partial<{ skuId: string; quantity: string }>) =>
     setItems((s) => s.map((row, i) => (i === idx ? { ...row, ...next } : row)))
+
+  const skuByCode = useMemo(() => {
+    const map = new Map<string, any>()
+    for (const sku of skus) {
+      const code = String(sku?.code || '').trim().toLowerCase()
+      if (!code || map.has(code)) continue
+      map.set(code, sku)
+    }
+    return map
+  }, [skus])
+
+  const focusScanner = () => {
+    const el = scannerInputRef.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }
+
+  useEffect(() => {
+    if (!scanMode) return
+    const t = window.setTimeout(() => focusScanner(), 0)
+    return () => window.clearTimeout(t)
+  }, [scanMode])
+
+  const applyScannedCode = (rawCode: string) => {
+    const code = rawCode.trim()
+    if (!code) return
+    const sku = skuByCode.get(code.toLowerCase())
+    if (!sku) {
+      setScanFeedback(`No SKU found for code "${code}"`)
+      return
+    }
+    setItems((prev) => {
+      const idx = prev.findIndex((x) => x.skuId === sku.id)
+      if (idx >= 0) {
+        const currentQty = parsePositiveInteger(prev[idx].quantity) ?? 0
+        return prev.map((row, i) => (i === idx ? { ...row, quantity: String(currentQty + 1) } : row))
+      }
+      const cleanRows = prev.filter((r) => r.skuId || (parsePositiveInteger(r.quantity) ?? 0) > 0)
+      return [...cleanRows, { skuId: sku.id, quantity: '1' }]
+    })
+    setScanFeedback(`Added ${sku.name} (${sku.code})`)
+  }
 
   const payloadItems = useMemo(
     () =>
@@ -190,17 +237,62 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
           <div className="min-h-0 flex-1 border border-gray-200 rounded-lg overflow-hidden bg-gray-50/40">
             <div className="flex justify-between items-center px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10">
               <label className="text-xs">Items</label>
-              <button type="button" onClick={addRow} className="inline-flex items-center gap-1 text-xs text-blue-600"><Plus className="w-3 h-3" /> Add</button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScanMode((v) => !v)
+                    setScanCode('')
+                    setScanFeedback(null)
+                  }}
+                  className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${
+                    scanMode ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <ScanLine className="w-3 h-3" />
+                  {scanMode ? 'Stop Scan' : 'Scan'}
+                </button>
+                <button type="button" onClick={addRow} disabled={scanMode} className="inline-flex items-center gap-1 text-xs text-blue-600 disabled:text-gray-400"><Plus className="w-3 h-3" /> Add</button>
+              </div>
             </div>
+            {scanMode ? (
+              <div className="px-3 py-2 border-b border-gray-200 bg-blue-50/70">
+                <div className="text-[11px] text-blue-800">
+                  Scan mode is ON. Scan barcode continuously; each scan increases quantity automatically.
+                </div>
+                <input
+                  ref={scannerInputRef}
+                  value={scanCode}
+                  onChange={(e) => setScanCode(e.target.value)}
+                  onBlur={() => {
+                    if (scanMode) focusScanner()
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    e.preventDefault()
+                    applyScannedCode(scanCode)
+                    setScanCode('')
+                    focusScanner()
+                  }}
+                  className="absolute opacity-0 pointer-events-none h-0 w-0"
+                  aria-hidden
+                  tabIndex={-1}
+                  autoComplete="off"
+                />
+                <div className="mt-1 text-[11px] text-blue-700">
+                  {scanFeedback || 'Ready for scan...'}
+                </div>
+              </div>
+            ) : null}
             <div className="p-3 space-y-2 overflow-y-auto overscroll-contain h-full">
               {items.map((row, idx) => {
                 const selected = items.filter((_, i) => i !== idx).map((x) => x.skuId).filter(Boolean)
                 const options = skus.filter((s: any) => s.id === row.skuId || !selected.includes(s.id)).map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))
                 return (
                   <div key={idx} className="flex items-center gap-2">
-                    <SearchableSelect value={row.skuId} onChange={(v) => updateRow(idx, { skuId: v })} placeholder="SKU" options={options} className="flex-1" menuPortal />
-                    <PositiveIntegerInput value={row.quantity} onChange={(v) => updateRow(idx, { quantity: v })} className="w-24 px-2 py-1 text-xs border rounded" />
-                    <button type="button" onClick={() => removeRow(idx)} className="p-1 text-red-600"><Trash2 className="w-4 h-4" /></button>
+                    <SearchableSelect value={row.skuId} onChange={(v) => updateRow(idx, { skuId: v })} placeholder="SKU" options={options} className={`flex-1 ${scanMode ? 'pointer-events-none opacity-70' : ''}`} menuPortal />
+                    <PositiveIntegerInput value={row.quantity} onChange={(v) => updateRow(idx, { quantity: v })} disabled={scanMode} className="w-24 px-2 py-1 text-xs border rounded disabled:bg-gray-100 disabled:text-gray-500" />
+                    <button type="button" onClick={() => removeRow(idx)} disabled={scanMode} className="p-1 text-red-600 disabled:text-gray-400"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 )
               })}

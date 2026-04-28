@@ -6,6 +6,7 @@ interface PositiveIntegerInputProps {
   placeholder?: string
   className?: string
   minLength?: number
+  disabled?: boolean
 }
 
 /** Plain text input that only allows positive integers (digits). Empty is allowed for typing. */
@@ -15,6 +16,7 @@ export function PositiveIntegerInput({
   placeholder = '0',
   className = '',
   minLength,
+  disabled = false,
 }: PositiveIntegerInputProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value
@@ -33,6 +35,7 @@ export function PositiveIntegerInput({
       onChange={handleChange}
       placeholder={placeholder}
       className={className}
+      disabled={disabled}
     />
   )
 }
