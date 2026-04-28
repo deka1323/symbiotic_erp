@@ -684,16 +684,14 @@ async function main() {
   }
   const stockPromises: any[] = []
   for (const inv of createdInventories) {
-    const batchId = batchByInvId.get(inv.id)!
     for (const sku of createdSkus) {
       stockPromises.push(
         prisma.stock.upsert({
-          where: { inventoryId_skuId_batchId: { inventoryId: inv.id, skuId: sku.id, batchId } },
+          where: { inventoryId_skuId: { inventoryId: inv.id, skuId: sku.id } },
           update: {},
           create: {
             inventoryId: inv.id,
             skuId: sku.id,
-            batchId,
             quantity: Math.floor(Math.random() * 50) + 10,
           },
         })
@@ -725,9 +723,9 @@ async function main() {
         })
 
         await tx.stock.upsert({
-          where: { inventoryId_skuId_batchId: { inventoryId: productionInventory.id, skuId: item.sku.id, batchId: batch.id } },
+          where: { inventoryId_skuId: { inventoryId: productionInventory.id, skuId: item.sku.id } },
           update: { quantity: { increment: item.quantity } },
-          create: { inventoryId: productionInventory.id, skuId: item.sku.id, batchId: batch.id, quantity: item.quantity },
+          create: { inventoryId: productionInventory.id, skuId: item.sku.id, quantity: item.quantity },
         })
       }
     })
