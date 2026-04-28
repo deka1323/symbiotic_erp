@@ -3,14 +3,9 @@ import { z } from 'zod'
 import { authorize } from '@/lib/middleware/auth'
 import { prisma } from '@/lib/prisma'
 
-const batchQuantitySchema = z.object({
-  batchId: z.string().uuid(),
-  quantity: z.number().int().min(0),
-})
-
 const roItemSchema = z.object({
   skuId: z.string().uuid(),
-  batches: z.array(batchQuantitySchema).min(1), // Each SKU has multiple batches with quantities
+  quantity: z.number().int().min(0),
 })
 
 const createFromTOSchema = z.object({
@@ -60,13 +55,6 @@ export async function GET(req: NextRequest) {
             toItems: {
               include: {
                 sku: true,
-                batch: {
-                  select: {
-                    id: true,
-                    batchId: true,
-                    productionDate: true,
-                  },
-                },
               },
             },
             purchaseOrder: {
@@ -144,13 +132,6 @@ export async function GET(req: NextRequest) {
           roItems: {
             include: {
               sku: true,
-              batch: {
-                select: {
-                  id: true,
-                  batchId: true,
-                  productionDate: true,
-                },
-              },
             },
           },
           transferOrder: {
@@ -200,12 +181,6 @@ export async function POST(req: NextRequest) {
           purchaseOrder: { include: { fromInventory: true, toInventory: true } },
           toItems: {
             include: {
-              batch: {
-                select: {
-                  id: true,
-                  batchId: true,
-                },
-              },
             },
           },
         },
@@ -226,80 +201,61 @@ export async function POST(req: NextRequest) {
           },
         })
 
-        // Process each item with its batches
+        // Process each item by SKU
         for (const item of validated.items) {
-          for (const batch of item.batches) {
-            // Create ROItem for this batch
-            await tx.rOItem.create({
-              data: {
-                receiveOrderId: ro.id,
-                skuId: item.skuId,
-                batchId: batch.batchId,
-                receivedQuantity: batch.quantity,
-              },
-            })
+          await tx.rOItem.create({
+            data: {
+              receiveOrderId: ro.id,
+              skuId: item.skuId,
+              receivedQuantity: item.quantity,
+            },
+          })
 
-            // Get existing stock for this batch (if any)
-            const existingStock = await tx.stock.findUnique({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: receivingInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-              },
-            })
-
-            const oldQuantity = existingStock?.quantity || 0
-            const newQuantity = oldQuantity + batch.quantity
-
-            // Update or create stock record on receiving inventory with batchId
-            await tx.stock.upsert({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: receivingInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-              },
-              update: { quantity: newQuantity },
-              create: {
+          const existingStock = await tx.stock.findUnique({
+            where: {
+              inventoryId_skuId: {
                 inventoryId: receivingInventoryId,
                 skuId: item.skuId,
-                batchId: batch.batchId,
-                quantity: batch.quantity,
               },
-            })
+            },
+          })
 
-            // Create stock history entry
-            await tx.stockHistory.create({
-              data: {
+          const oldQuantity = existingStock?.quantity || 0
+          const newQuantity = oldQuantity + item.quantity
+
+          await tx.stock.upsert({
+            where: {
+              inventoryId_skuId: {
                 inventoryId: receivingInventoryId,
                 skuId: item.skuId,
-                batchId: batch.batchId,
-                userId,
-                oldQuantity,
-                newQuantity,
-                reason: `Receive Order ${roNumber} from Transfer Order`,
               },
-            })
+            },
+            update: { quantity: newQuantity },
+            create: {
+              inventoryId: receivingInventoryId,
+              skuId: item.skuId,
+              quantity: item.quantity,
+            },
+          })
 
-            // Find the TOItem for this SKU and batch
-            const toItem = to.toItems.find(
-              (ti) => ti.skuId === item.skuId && ti.batchId === batch.batchId
-            )
-            if (toItem) {
-              // Update TOItem receivedQuantity per batch (store the difference if received != sent)
-              await tx.tOItem.updateMany({
-                where: {
-                  transferOrderId: validated.transferOrderId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-                data: { receivedQuantity: batch.quantity },
-              })
-            }
-          }
+          await tx.stockHistory.create({
+            data: {
+              inventoryId: receivingInventoryId,
+              skuId: item.skuId,
+              userId,
+              oldQuantity,
+              newQuantity,
+              reason: `Receive Order ${roNumber} from Transfer Order`,
+            },
+          })
+
+          await tx.tOItem.updateMany({
+            where: {
+              transferOrderId: validated.transferOrderId,
+              skuId: item.skuId,
+            },
+            data: { receivedQuantity: item.quantity },
+          })
         }
 
         // Mark transfer order as FULFILLED
@@ -335,64 +291,53 @@ export async function POST(req: NextRequest) {
           },
         })
 
-        // Process each item with its batches
+        // Process each item by SKU
         for (const item of validated.items) {
-          for (const batch of item.batches) {
-            // Create ROItem for this batch
-            await tx.rOItem.create({
-              data: {
-                receiveOrderId: ro.id,
-                skuId: item.skuId,
-                batchId: batch.batchId,
-                receivedQuantity: batch.quantity,
-              },
-            })
+          await tx.rOItem.create({
+            data: {
+              receiveOrderId: ro.id,
+              skuId: item.skuId,
+              receivedQuantity: item.quantity,
+            },
+          })
 
-            // Get existing stock for this batch (if any)
-            const existingStock = await tx.stock.findUnique({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: validated.toInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-              },
-            })
-
-            const oldQty = existingStock?.quantity || 0
-            const newQty = oldQty + batch.quantity
-
-            // Update or create stock record on receiving inventory with batchId
-            await tx.stock.upsert({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: validated.toInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-              },
-              update: { quantity: newQty },
-              create: {
+          const existingStock = await tx.stock.findUnique({
+            where: {
+              inventoryId_skuId: {
                 inventoryId: validated.toInventoryId,
                 skuId: item.skuId,
-                batchId: batch.batchId,
-                quantity: batch.quantity,
               },
-            })
+            },
+          })
 
-            // Create stock history entry with batchId
-            await tx.stockHistory.create({
-              data: {
+          const oldQty = existingStock?.quantity || 0
+          const newQty = oldQty + item.quantity
+
+          await tx.stock.upsert({
+            where: {
+              inventoryId_skuId: {
                 inventoryId: validated.toInventoryId,
                 skuId: item.skuId,
-                batchId: batch.batchId,
-                userId,
-                oldQuantity: oldQty,
-                newQuantity: newQty,
-                reason: `Manual Receive Order ${roNumber}`,
               },
-            })
-          }
+            },
+            update: { quantity: newQty },
+            create: {
+              inventoryId: validated.toInventoryId,
+              skuId: item.skuId,
+              quantity: item.quantity,
+            },
+          })
+
+          await tx.stockHistory.create({
+            data: {
+              inventoryId: validated.toInventoryId,
+              skuId: item.skuId,
+              userId,
+              oldQuantity: oldQty,
+              newQuantity: newQty,
+              reason: `Manual Receive Order ${roNumber}`,
+            },
+          })
         }
 
         return ro

@@ -446,7 +446,6 @@ export default function TransferOrdersPage() {
             setSelectedPO(null)
           }}
           onCreated={handleCreated}
-          onError={(err) => setError(err)}
         />
       )}
 
@@ -456,7 +455,6 @@ export default function TransferOrdersPage() {
           fromInventory={selectedInventory}
           onClose={() => setShowCreateManual(false)}
           onCreated={handleCreated}
-          onError={(err) => setError(err)}
         />
       )}
 

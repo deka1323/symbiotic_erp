@@ -16,13 +16,6 @@ export async function GET(
         toItems: {
           include: {
             sku: true,
-            batch: {
-              select: {
-                id: true,
-                batchId: true,
-                productionDate: true,
-              },
-            },
           },
         },
         purchaseOrder: {

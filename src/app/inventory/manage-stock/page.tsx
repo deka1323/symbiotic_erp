@@ -8,14 +8,11 @@ import { PermissionGate } from '@/components/PermissionGate'
 import { authFetch } from '@/lib/fetch'
 import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { formatSiteDateAndTime, formatSiteNumber } from '@/lib/dates'
 
 export default function ManageStockPage() {
   const { selectedInventory } = useInventoryContext()
   const [stocks, setStocks] = useState<any[]>([])
-  const [batchIds, setBatchIds] = useState<string[]>([])
-  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null)
   const [history, setHistory] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -24,7 +21,7 @@ export default function ManageStockPage() {
   const [historyPage, setHistoryPage] = useState(1)
   const [historyPageSize, setHistoryPageSize] = useState(10)
   const [historyTotal, setHistoryTotal] = useState(0)
-  const [editing, setEditing] = useState<{ inventoryId: string; skuId: string; batchId: string; currentQty: number; skuName: string; batchIdDisplay: string } | null>(null)
+  const [editing, setEditing] = useState<{ inventoryId: string; skuId: string; currentQty: number; skuName: string } | null>(null)
   const [newQtyStr, setNewQtyStr] = useState('')
   const [reason, setReason] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
@@ -46,9 +43,6 @@ export default function ManageStockPage() {
       const params = new URLSearchParams({
         inventoryId: selectedInventory.id,
       })
-      if (selectedBatchId) {
-        params.append('batchId', selectedBatchId)
-      }
       const res = await fetch(`/api/inventory/stock?${params}`, { 
         headers: { Authorization: `Bearer ${token}` } 
       })
@@ -58,7 +52,6 @@ export default function ManageStockPage() {
       }
       const data = await res.json()
       setStocks(data.data || [])
-      setBatchIds(data.batchIds || [])
     } catch (err: any) {
       console.error(err)
       setError(err.message || 'Failed to fetch stocks')
@@ -102,7 +95,7 @@ export default function ManageStockPage() {
   useEffect(() => {
     fetchStocks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedInventory, selectedBatchId])
+  }, [selectedInventory])
 
   useEffect(() => {
     fetchHistory()
@@ -135,20 +128,15 @@ export default function ManageStockPage() {
     }
   }, [editing, showConfirm])
 
-  const openEdit = (skuId: string, batchId: string, currentQty: number) => {
+  const openEdit = (skuId: string, currentQty: number) => {
     const stockItem = stocks.find((s) => s.skuId === skuId)
     if (!stockItem) return
-    
-    const batch = stockItem.batches.find((b: any) => b.batchId === batchId)
-    if (!batch) return
 
     setEditing({
       inventoryId: selectedInventory!.id,
       skuId,
-      batchId: batch.batch?.id || batchId,
       currentQty,
       skuName: stockItem.sku?.name || stockItem.sku?.code || skuId,
-      batchIdDisplay: batch.batchId,
     })
     setNewQtyStr(String(currentQty))
     setReason('')
@@ -188,7 +176,6 @@ export default function ManageStockPage() {
         body: JSON.stringify({
           inventoryId: editing.inventoryId,
           skuId: editing.skuId,
-          batchId: editing.batchId,
           newQuantity: qty,
           reason: reason.trim(),
         }),
@@ -214,33 +201,19 @@ export default function ManageStockPage() {
   const stockColumns: Column<any>[] = [
     { key: 'skuName', header: 'SKU Name', render: (r) => <span className="text-xs font-medium text-gray-900">{r.sku?.name || '—'}</span> },
     { key: 'skuCode', header: 'SKU Code', render: (r) => <span className="text-xs text-gray-600">{r.sku?.code || r.skuId || '—'}</span> },
-    { key: 'totalQuantity', header: 'Total', render: (r) => <span className="text-xs font-semibold text-gray-900 tabular-nums">{r.totalQuantity}</span> },
+    { key: 'totalQuantity', header: 'Quantity', render: (r) => <span className="text-xs font-semibold text-gray-900 tabular-nums">{r.totalQuantity}</span> },
     {
-      key: 'batches',
-      header: 'Batch breakdown',
-      subRender: (r) => {
-        const batches = r.batches || []
-        if (batches.length === 0) return <span className="text-[10px] text-gray-400">—</span>
-        return (
-          <div className="min-w-[200px] border border-gray-200 rounded bg-gray-50/80 overflow-hidden">
-            <div className="divide-y divide-gray-200">
-              {batches.map((b: any) => (
-                <div key={b.batch?.batchId ?? b.batchId} className="flex justify-between items-center px-2 py-1.5 text-[10px]">
-                  <span className="text-gray-800 font-medium">{b.batch?.batchId ?? b.batchId}</span>
-                  <span className="text-gray-600 tabular-nums ml-2">{b.quantity}</span>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(r.skuId, b.batch?.batchId ?? b.batchId, b.quantity)}
-                    className="ml-2 text-blue-600 hover:text-blue-700 underline shrink-0"
-                  >
-                    Edit
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      },
+      key: 'actions',
+      header: 'Actions',
+      render: (r) => (
+        <button
+          type="button"
+          onClick={() => openEdit(r.skuId, r.totalQuantity)}
+          className="text-blue-600 hover:text-blue-700 text-xs underline"
+        >
+          Edit
+        </button>
+      ),
     },
   ]
 
@@ -322,13 +295,6 @@ export default function ManageStockPage() {
           </div>
           <div className="flex items-center gap-2">
             <Filter className="w-3.5 h-3.5 text-gray-500" />
-            <SearchableSelect
-              value={selectedBatchId || ''}
-              onChange={(v) => { setSelectedBatchId(v || null); setPage(1) }}
-              placeholder="All Batches"
-              options={batchIds.map((bid) => ({ value: bid, label: bid }))}
-              className="min-w-[140px]"
-            />
           </div>
         </div>
       </div>
@@ -378,7 +344,6 @@ export default function ManageStockPage() {
               <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500">Total stock</p>
               <p className="text-[10px] text-gray-400 mt-0.5">
                 Sum of all quantities across {stocks.length} SKU{stocks.length !== 1 ? 's' : ''}
-                {selectedBatchId ? ` in batch ${selectedBatchId}` : ''}
               </p>
             </div>
             <div className="text-right">
@@ -459,12 +424,6 @@ export default function ManageStockPage() {
               <div>
                 <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">SKU</div>
                 <div className="text-sm font-semibold text-gray-900">{editing.skuName}</div>
-              </div>
-
-              {/* Batch Info */}
-              <div>
-                <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Batch ID</div>
-                <div className="text-sm font-semibold text-gray-900">{editing.batchIdDisplay}</div>
               </div>
 
               {/* Current vs New Quantity */}
@@ -560,7 +519,6 @@ export default function ManageStockPage() {
           >
             <div className="text-xs text-gray-700 space-y-2">
               <p><strong>SKU:</strong> {editing.skuName}</p>
-              <p><strong>Batch:</strong> {editing.batchIdDisplay}</p>
               <p><strong>Current quantity:</strong> {editing.currentQty}</p>
               <p><strong>New quantity:</strong> {parsePositiveInteger(newQtyStr) ?? 0}</p>
               <p><strong>Reason:</strong> {reason.trim()}</p>

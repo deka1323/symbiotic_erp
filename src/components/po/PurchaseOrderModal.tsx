@@ -31,6 +31,7 @@ export function PurchaseOrderModal({
   ])
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
   const [creatorName, setCreatorName] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -87,29 +88,36 @@ export function PurchaseOrderModal({
   }
 
   const requestCreate = () => {
+    setModalError(null)
     if (!fromInventory) {
+      setModalError('From inventory is required')
       onError?.('From inventory is required')
       return
     }
     if (!toInventoryId) {
+      setModalError('Please select a destination inventory')
       onError?.('Please select a destination inventory')
       return
     }
     if (toInventoryId === fromInventory.id) {
+      setModalError('Destination inventory must be different from source inventory')
       onError?.('Destination inventory must be different from source inventory')
       return
     }
     if (items.length === 0) {
+      setModalError('Please add at least one item')
       onError?.('Please add at least one item')
       return
     }
     for (const it of items) {
       if (!it.skuId) {
+        setModalError('Please provide valid SKU for all items')
         onError?.('Please provide valid SKU for all items')
         return
       }
       const q = parsePositiveInteger(it.requestedQuantity)
       if (q === null || q < 1) {
+        setModalError('Amount can not be zero.')
         onError?.('Amount can not be zero.')
         return
       }
@@ -123,6 +131,7 @@ export function PurchaseOrderModal({
       .map((it) => ({ skuId: it.skuId, requestedQuantity: parsePositiveInteger(it.requestedQuantity) ?? 0 }))
       .filter((it) => it.skuId && it.requestedQuantity >= 1)
     if (parsed.some((p) => p.requestedQuantity < 1)) {
+      setModalError('Amount can not be zero.')
       onError?.('Amount can not be zero.')
       return
     }
@@ -145,6 +154,7 @@ export function PurchaseOrderModal({
       }
       onCreated && onCreated()
     } catch (err: any) {
+      setModalError(err.message || 'Failed to create purchase order')
       onError?.(err.message || 'Failed to create purchase order')
     } finally {
       setIsSubmitting(false)
@@ -294,7 +304,7 @@ export function PurchaseOrderModal({
   return (
     <div ref={overlayRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
       <div
-        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-hidden animate-fade-in flex flex-col"
+        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-6xl h-[96vh] overflow-hidden animate-fade-in flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-gray-200/80 flex items-center justify-between bg-gray-50/50">
@@ -306,7 +316,12 @@ export function PurchaseOrderModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-4 space-y-4 overflow-y-auto overscroll-contain">
+        <div className="p-4 min-h-0 flex-1 flex flex-col gap-4 overflow-hidden">
+          {modalError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-xs">
+              {modalError}
+            </div>
+          )}
           {/* Inventory Selection */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -335,8 +350,8 @@ export function PurchaseOrderModal({
           </div>
 
           {/* Items */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
+          <div className="min-h-0 flex-1 border border-gray-200 rounded-lg overflow-hidden bg-gray-50/40">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10">
               <label className="block text-xs font-medium text-gray-700">
                 Items <span className="text-red-500">*</span>
               </label>
@@ -349,7 +364,7 @@ export function PurchaseOrderModal({
                 Add Item
               </button>
             </div>
-            <div className="space-y-2">
+            <div className="p-3 space-y-2 overflow-y-auto overscroll-contain h-full">
               {items.map((it, idx) => (
                 <div key={idx} className="flex items-center gap-2 p-2 border border-gray-200 rounded-lg">
                   <SearchableSelect

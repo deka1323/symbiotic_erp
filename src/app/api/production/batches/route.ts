@@ -143,10 +143,9 @@ export async function POST(req: NextRequest) {
 
         const existingStock = await tx.stock.findUnique({
           where: {
-            inventoryId_skuId_batchId: {
+            inventoryId_skuId: {
               inventoryId,
               skuId: item.skuId,
-              batchId: batch.id,
             },
           },
         })
@@ -156,17 +155,15 @@ export async function POST(req: NextRequest) {
 
         await tx.stock.upsert({
           where: {
-            inventoryId_skuId_batchId: {
+            inventoryId_skuId: {
               inventoryId,
               skuId: item.skuId,
-              batchId: batch.id,
             },
           },
           update: { quantity: newQuantity },
           create: {
             inventoryId,
             skuId: item.skuId,
-            batchId: batch.id,
             quantity: item.quantity,
           },
         })

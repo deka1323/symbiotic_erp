@@ -447,7 +447,6 @@ export default function ReceiveOrdersPage() {
             setSelectedTO(null)
           }}
           onCreated={handleCreated}
-          onError={(err) => setError(err)}
         />
       )}
 

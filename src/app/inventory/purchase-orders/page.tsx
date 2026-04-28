@@ -358,7 +358,6 @@ export default function PurchaseOrdersPage() {
           fromInventory={selectedInventory}
           onClose={() => setShowCreate(false)}
           onCreated={handleCreated}
-          onError={(err) => setError(err)}
         />
       )}
 

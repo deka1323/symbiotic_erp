@@ -3,14 +3,9 @@ import { z } from 'zod'
 import { authorize } from '@/lib/middleware/auth'
 import { prisma } from '@/lib/prisma'
 
-const batchQuantitySchema = z.object({
-  batchId: z.string().uuid(),
-  quantity: z.number().int().min(1),
-})
-
 const toItemSchema = z.object({
   skuId: z.string().uuid(),
-  batches: z.array(batchQuantitySchema).min(1), // Each SKU has multiple batches with quantities
+  quantity: z.number().int().min(1),
 })
 
 const createFromPOSchema = z.object({
@@ -81,13 +76,6 @@ export async function GET(req: NextRequest) {
           toItems: {
             include: {
               sku: true,
-              batch: {
-                select: {
-                  id: true,
-                  batchId: true,
-                  productionDate: true,
-                },
-              },
             },
           },
           purchaseOrder: {
@@ -138,24 +126,21 @@ export async function POST(req: NextRequest) {
         }
         const sendingInventoryId = po.toInventoryId
 
-        // Verify stock availability per batch
+        // Verify stock availability per SKU
         for (const item of validated.items) {
-          for (const batch of item.batches) {
-            const stock = await tx.stock.findUnique({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: sendingInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
+          const stock = await tx.stock.findUnique({
+            where: {
+              inventoryId_skuId: {
+                inventoryId: sendingInventoryId,
+                skuId: item.skuId,
               },
-            })
-            const available = stock?.quantity || 0
-            if (available < batch.quantity) {
-              throw new Error(
-                `Insufficient stock for SKU ${item.skuId} in batch ${batch.batchId}. Available: ${available}, Requested: ${batch.quantity}`
-              )
-            }
+            },
+          })
+          const available = stock?.quantity || 0
+          if (available < item.quantity) {
+            throw new Error(
+              `Insufficient stock for SKU ${item.skuId}. Available: ${available}, Requested: ${item.quantity}`
+            )
           }
         }
 
@@ -169,54 +154,48 @@ export async function POST(req: NextRequest) {
           },
         })
 
-        // Deduct stock and create TOItems per batch (record in StockHistory for audit)
+        // Deduct stock and create TOItems per SKU
         const userId = authResult.user.userId
         for (const item of validated.items) {
-          for (const batch of item.batches) {
-            const stockRow = await tx.stock.findUnique({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: sendingInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-              },
-            })
-            const oldQuantity = stockRow?.quantity ?? 0
-            const newQuantity = oldQuantity - batch.quantity
-
-            await tx.stock.update({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: sendingInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-              },
-              data: { quantity: { decrement: batch.quantity } as any },
-            })
-
-            await tx.stockHistory.create({
-              data: {
+          const stockRow = await tx.stock.findUnique({
+            where: {
+              inventoryId_skuId: {
                 inventoryId: sendingInventoryId,
                 skuId: item.skuId,
-                batchId: batch.batchId,
-                userId,
-                oldQuantity,
-                newQuantity,
-                reason: `Transfer Order ${toNumber} (sent out)`,
               },
-            })
+            },
+          })
+          const oldQuantity = stockRow?.quantity ?? 0
+          const newQuantity = oldQuantity - item.quantity
 
-            await tx.tOItem.create({
-              data: {
-                transferOrderId: to.id,
+          await tx.stock.update({
+            where: {
+              inventoryId_skuId: {
+                inventoryId: sendingInventoryId,
                 skuId: item.skuId,
-                batchId: batch.batchId,
-                sentQuantity: batch.quantity,
               },
-            })
-          }
+            },
+            data: { quantity: { decrement: item.quantity } as any },
+          })
+
+          await tx.stockHistory.create({
+            data: {
+              inventoryId: sendingInventoryId,
+              skuId: item.skuId,
+              userId,
+              oldQuantity,
+              newQuantity,
+              reason: `Transfer Order ${toNumber} (sent out)`,
+            },
+          })
+
+          await tx.tOItem.create({
+            data: {
+              transferOrderId: to.id,
+              skuId: item.skuId,
+              sentQuantity: item.quantity,
+            },
+          })
         }
 
         // Update PO status to IN_TRANSIT
@@ -234,32 +213,27 @@ export async function POST(req: NextRequest) {
 
         const sendingInventoryId = validated.fromInventoryId
 
-        // Verify stock availability per batch
+        // Verify stock availability per SKU
         for (const item of validated.items) {
-          for (const batch of item.batches) {
-            const stock = await tx.stock.findUnique({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: sendingInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
+          const stock = await tx.stock.findUnique({
+            where: {
+              inventoryId_skuId: {
+                inventoryId: sendingInventoryId,
+                skuId: item.skuId,
               },
-            })
-            const available = stock?.quantity || 0
-            if (available < batch.quantity) {
-              throw new Error(
-                `Insufficient stock for SKU ${item.skuId} in batch ${batch.batchId}. Available: ${available}, Requested: ${batch.quantity}`
-              )
-            }
+            },
+          })
+          const available = stock?.quantity || 0
+          if (available < item.quantity) {
+            throw new Error(
+              `Insufficient stock for SKU ${item.skuId}. Available: ${available}, Requested: ${item.quantity}`
+            )
           }
         }
 
-        // Calculate total quantities per SKU for PO items
         const skuTotals = new Map<string, number>()
         for (const item of validated.items) {
-          const total = item.batches.reduce((sum, b) => sum + b.quantity, 0)
-          skuTotals.set(item.skuId, total)
+          skuTotals.set(item.skuId, item.quantity)
         }
 
         // Create an associated PO so the TO is tied into the inventory flow
@@ -299,54 +273,48 @@ export async function POST(req: NextRequest) {
           },
         })
 
-        // Deduct stock and create TOItems per batch (record in StockHistory for audit)
+        // Deduct stock and create TOItems per SKU
         const userId = authResult.user.userId
         for (const item of validated.items) {
-          for (const batch of item.batches) {
-            const stockRow = await tx.stock.findUnique({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: sendingInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-              },
-            })
-            const oldQuantity = stockRow?.quantity ?? 0
-            const newQuantity = oldQuantity - batch.quantity
-
-            await tx.stock.update({
-              where: {
-                inventoryId_skuId_batchId: {
-                  inventoryId: sendingInventoryId,
-                  skuId: item.skuId,
-                  batchId: batch.batchId,
-                },
-              },
-              data: { quantity: { decrement: batch.quantity } as any },
-            })
-
-            await tx.stockHistory.create({
-              data: {
+          const stockRow = await tx.stock.findUnique({
+            where: {
+              inventoryId_skuId: {
                 inventoryId: sendingInventoryId,
                 skuId: item.skuId,
-                batchId: batch.batchId,
-                userId,
-                oldQuantity,
-                newQuantity,
-                reason: `Transfer Order ${toNumber} (sent out)`,
               },
-            })
+            },
+          })
+          const oldQuantity = stockRow?.quantity ?? 0
+          const newQuantity = oldQuantity - item.quantity
 
-            await tx.tOItem.create({
-              data: {
-                transferOrderId: to.id,
+          await tx.stock.update({
+            where: {
+              inventoryId_skuId: {
+                inventoryId: sendingInventoryId,
                 skuId: item.skuId,
-                batchId: batch.batchId,
-                sentQuantity: batch.quantity,
               },
-            })
-          }
+            },
+            data: { quantity: { decrement: item.quantity } as any },
+          })
+
+          await tx.stockHistory.create({
+            data: {
+              inventoryId: sendingInventoryId,
+              skuId: item.skuId,
+              userId,
+              oldQuantity,
+              newQuantity,
+              reason: `Transfer Order ${toNumber} (sent out)`,
+            },
+          })
+
+          await tx.tOItem.create({
+            data: {
+              transferOrderId: to.id,
+              skuId: item.skuId,
+              sentQuantity: item.quantity,
+            },
+          })
         }
 
         return to

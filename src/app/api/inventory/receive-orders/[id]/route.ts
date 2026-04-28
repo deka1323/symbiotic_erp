@@ -16,13 +16,6 @@ export async function GET(
         roItems: {
           include: {
             sku: true,
-            batch: {
-              select: {
-                id: true,
-                batchId: true,
-                productionDate: true,
-              },
-            },
           },
         },
         transferOrder: {
@@ -38,13 +31,6 @@ export async function GET(
             toItems: {
               include: {
                 sku: true,
-                batch: {
-                  select: {
-                    id: true,
-                    batchId: true,
-                    productionDate: true,
-                  },
-                },
               },
             },
             employee: true,
