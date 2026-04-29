@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Column, DataTable } from '@/components/DataTable'
 import { useInventoryContext } from '@/contexts/InventoryContext'
-import { Plus, Package, X, Trash2, CheckCircle, AlertCircle } from 'lucide-react'
+import { Plus, Package, X, Trash2, CheckCircle, AlertCircle, ScanLine } from 'lucide-react'
 import { authFetch } from '@/lib/fetch'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
@@ -87,9 +87,14 @@ export default function DailyProductionPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [productionDate, setProductionDate] = useState('')
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [scanMode, setScanMode] = useState(false)
+  const [scanCode, setScanCode] = useState('')
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
+  const scannerInputRef = useRef<HTMLInputElement>(null)
 
   const fetchSkus = async () => {
     try {
@@ -162,6 +167,49 @@ export default function DailyProductionPage() {
   }
   const removeItem = (idx: number) => { setItems(items.filter((_, i) => i !== idx)) }
 
+  const skuByCode = useMemo(() => {
+    const map = new Map<string, SKU>()
+    for (const sku of skus) {
+      const code = String(sku.code || '').trim().toLowerCase()
+      if (!code || map.has(code)) continue
+      map.set(code, sku)
+    }
+    return map
+  }, [skus])
+
+  const focusScanner = () => {
+    const el = scannerInputRef.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }
+
+  useEffect(() => {
+    if (!scanMode) return
+    const t = window.setTimeout(() => focusScanner(), 0)
+    return () => window.clearTimeout(t)
+  }, [scanMode])
+
+  const applyScannedCode = (rawCode: string) => {
+    const code = rawCode.trim()
+    if (!code) return
+    const sku = skuByCode.get(code.toLowerCase())
+    if (!sku) {
+      setScanFeedback(`No SKU found for code "${code}"`)
+      return
+    }
+    setItems((prev) => {
+      const idx = prev.findIndex((x) => x.skuId === sku.id)
+      if (idx >= 0) {
+        const currentQty = parsePositiveInteger(prev[idx].quantity) ?? 0
+        return prev.map((row, i) => (i === idx ? { ...row, quantity: String(currentQty + 1) } : row))
+      }
+      const cleanRows = prev.filter((r) => r.skuId || (parsePositiveInteger(r.quantity) ?? 0) > 0)
+      return [...cleanRows, { skuId: sku.id, quantity: '1' }]
+    })
+    setScanFeedback(`Added ${sku.name} (${sku.code})`)
+  }
+
   const requestCreateBatch = () => {
     setErrorMessage(null)
     if (!selectedInventory) { setErrorMessage('Please select an inventory from the header dropdown.'); return }
@@ -189,7 +237,11 @@ export default function DailyProductionPage() {
       const res = await authFetch('/api/production/batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventoryId: selectedInventory.id, items: parsed }),
+        body: JSON.stringify({
+          inventoryId: selectedInventory.id,
+          productionDate: productionDate || undefined,
+          items: parsed,
+        }),
       })
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -214,7 +266,13 @@ export default function DailyProductionPage() {
     }
   }
 
-  const openAddModal = () => { setItems([{ skuId: '', quantity: '' }]); setErrorMessage(null); setShowConfirm(false); setShowAddModal(true) }
+  const openAddModal = () => {
+    setItems([{ skuId: '', quantity: '' }])
+    setProductionDate('')
+    setErrorMessage(null)
+    setShowConfirm(false)
+    setShowAddModal(true)
+  }
   const columns = getProductionColumns()
 
   return (
@@ -257,7 +315,7 @@ export default function DailyProductionPage() {
       </div>
       {showAddModal && (
         <div ref={overlayRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-6xl h-[96vh] overflow-hidden flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50/80 to-white">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white"><Package className="w-5 h-5" /></div>
@@ -270,21 +328,78 @@ export default function DailyProductionPage() {
               </div>
               <button type="button" onClick={() => setShowAddModal(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="p-5 min-h-0 flex-1 flex flex-col gap-4 overflow-hidden">
               {errorMessage && (
                 <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {errorMessage}
                 </div>
               )}
-              <div className="space-y-2">
+              <div className="space-y-2 min-h-0 flex-1 flex flex-col">
+                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                  <label className="block text-[11px] font-medium text-gray-700 mb-1">Production Date (optional, for back-date entry)</label>
+                  <input
+                    type="date"
+                    value={productionDate}
+                    onChange={(e) => setProductionDate(e.target.value)}
+                    className="w-full max-w-xs px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Leave empty to use today. Same inventory + same date maps to one daily batch.
+                  </p>
+                </div>
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-700">Items</label>
-                  <button type="button" onClick={addItem} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"><Plus className="w-3.5 h-3.5" /> Add item</button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScanMode((v) => !v)
+                        setScanCode('')
+                        setScanFeedback(null)
+                      }}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${
+                        scanMode ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <ScanLine className="w-3 h-3" />
+                      {scanMode ? 'Stop Scan' : 'Scan'}
+                    </button>
+                    <button type="button" onClick={addItem} disabled={scanMode} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors disabled:text-gray-400"><Plus className="w-3.5 h-3.5" /> Add item</button>
+                  </div>
                 </div>
+                {scanMode ? (
+                  <div className="px-3 py-2 border border-blue-200 rounded-lg bg-blue-50/70">
+                    <div className="text-[11px] text-blue-800">
+                      Scan mode is ON. Scan barcode continuously; each scan increases quantity automatically.
+                    </div>
+                    <input
+                      ref={scannerInputRef}
+                      value={scanCode}
+                      onChange={(e) => setScanCode(e.target.value)}
+                      onBlur={() => {
+                        if (scanMode) focusScanner()
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return
+                        e.preventDefault()
+                        applyScannedCode(scanCode)
+                        setScanCode('')
+                        focusScanner()
+                      }}
+                      className="absolute opacity-0 pointer-events-none h-0 w-0"
+                      aria-hidden
+                      tabIndex={-1}
+                      autoComplete="off"
+                    />
+                    <div className="mt-1 text-[11px] text-blue-700">
+                      {scanFeedback || 'Ready for scan...'}
+                    </div>
+                  </div>
+                ) : null}
                 {items.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-8 text-center text-xs text-gray-500">No items yet. Click &quot;Add item&quot; to add SKU and quantity.</div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-h-0 overflow-y-auto overscroll-contain pr-1">
                     {items.map((it, idx) => {
                       const selectedInOtherRows = items.filter((_, i) => i !== idx).map((i) => i.skuId).filter(Boolean)
                       const skuOptions = skus
@@ -298,10 +413,10 @@ export default function DailyProductionPage() {
                           placeholder="Select SKU"
                           options={skuOptions}
                           menuPortal
-                          className="flex-1 min-w-[200px]"
+                          className={`flex-1 min-w-[200px] ${scanMode ? 'pointer-events-none opacity-70' : ''}`}
                         />
-                        <PositiveIntegerInput value={it.quantity} onChange={(v) => updateItem(idx, { quantity: v })} className="w-24 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white tabular-nums" placeholder="Qty" />
-                        <button type="button" onClick={() => removeItem(idx)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove"><Trash2 className="w-4 h-4" /></button>
+                        <PositiveIntegerInput value={it.quantity} onChange={(v) => updateItem(idx, { quantity: v })} disabled={scanMode} className="w-24 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white tabular-nums disabled:bg-gray-100 disabled:text-gray-500" placeholder="Qty" />
+                        <button type="button" onClick={() => removeItem(idx)} disabled={scanMode} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:text-gray-300 disabled:hover:bg-transparent" title="Remove"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     )})}
                   </div>
@@ -327,6 +442,7 @@ export default function DailyProductionPage() {
       >
         <div className="text-xs text-gray-700 space-y-1">
           <p><strong>Inventory:</strong> {selectedInventory?.name}</p>
+          <p><strong>Production date:</strong> {productionDate || 'Today'}</p>
           <p className="mt-2"><strong>Items:</strong></p>
           <ul className="list-disc list-inside ml-1">
             {items.map((it, i) => {

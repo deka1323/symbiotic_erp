@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const inventoryId = searchParams.get('inventoryId') || ''
     const skuIdParam = searchParams.get('skuId') || ''
+    const search = (searchParams.get('search') || '').trim()
 
     if (!inventoryId) {
       return NextResponse.json({ error: 'inventoryId is required' }, { status: 400 })
@@ -29,6 +30,14 @@ export async function GET(req: NextRequest) {
       quantity: { gt: 0 },
     }
     if (skuIdParam) where.skuId = skuIdParam
+    if (search) {
+      where.sku = {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { code: { contains: search, mode: 'insensitive' } },
+        ],
+      }
+    }
 
     const stocks = await prisma.stock.findMany({
       where,

@@ -3,10 +3,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { DataTable, Column } from '@/components/DataTable'
 import { useInventoryContext } from '@/contexts/InventoryContext'
-import { Package, X, CheckCircle, XCircle, AlertCircle, Filter, Layers } from 'lucide-react'
+import { Package, X, CheckCircle, XCircle, AlertCircle, Filter, Layers, Search } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 import { authFetch } from '@/lib/fetch'
-import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
+import { PositiveIntegerInput, parseNonNegativeInteger } from '@/components/ui/PositiveIntegerInput'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatSiteDateAndTime, formatSiteNumber } from '@/lib/dates'
 
@@ -26,6 +26,7 @@ export default function ManageStockPage() {
   const [reason, setReason] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -43,6 +44,8 @@ export default function ManageStockPage() {
       const params = new URLSearchParams({
         inventoryId: selectedInventory.id,
       })
+      const q = searchQuery.trim()
+      if (q) params.set('search', q)
       const res = await fetch(`/api/inventory/stock?${params}`, { 
         headers: { Authorization: `Bearer ${token}` } 
       })
@@ -95,10 +98,11 @@ export default function ManageStockPage() {
   useEffect(() => {
     fetchStocks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedInventory])
+  }, [selectedInventory, searchQuery])
 
   useEffect(() => {
     fetchHistory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInventory, historyPage, historyPageSize])
 
   // Auto-hide success message
@@ -150,9 +154,9 @@ export default function ManageStockPage() {
       setError('Reason must be at least 3 characters')
       return
     }
-    const qty = parsePositiveInteger(newQtyStr)
-    if (qty == null || qty < 1) {
-      setError('Amount can not be zero.')
+    const qty = parseNonNegativeInteger(newQtyStr)
+    if (qty == null || qty < 0) {
+      setError('Quantity must be 0 or greater.')
       return
     }
     setError(null)
@@ -161,9 +165,9 @@ export default function ManageStockPage() {
 
   const saveEdit = async () => {
     if (!editing) return
-    const qty = parsePositiveInteger(newQtyStr)
-    if (qty == null || qty < 1) {
-      setError('Amount can not be zero.')
+    const qty = parseNonNegativeInteger(newQtyStr)
+    if (qty == null || qty < 0) {
+      setError('Quantity must be 0 or greater.')
       return
     }
     setIsSubmitting(true)
@@ -298,6 +302,20 @@ export default function ManageStockPage() {
           </div>
         </div>
       </div>
+      {selectedInventory && (
+        <div className="bg-white rounded-lg border border-gray-200/80 px-4 py-3 shadow-sm">
+          <div className="relative max-w-md">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by SKU name or code..."
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       {error && (
@@ -448,16 +466,16 @@ export default function ManageStockPage() {
               </div>
 
               {/* Quantity Change Indicator */}
-              {(parsePositiveInteger(newQtyStr) ?? 0) !== editing.currentQty && (
+              {(parseNonNegativeInteger(newQtyStr) ?? 0) !== editing.currentQty && (
                 <div className={`px-3 py-2 rounded-lg border text-xs ${
-                  (parsePositiveInteger(newQtyStr) ?? 0) > editing.currentQty
+                  (parseNonNegativeInteger(newQtyStr) ?? 0) > editing.currentQty
                     ? 'bg-green-50 border-green-200 text-green-700'
                     : 'bg-red-50 border-red-200 text-red-700'
                 }`}>
-                  {(parsePositiveInteger(newQtyStr) ?? 0) > editing.currentQty ? (
-                    <span>+{(parsePositiveInteger(newQtyStr) ?? 0) - editing.currentQty} (Increase)</span>
+                  {(parseNonNegativeInteger(newQtyStr) ?? 0) > editing.currentQty ? (
+                    <span>+{(parseNonNegativeInteger(newQtyStr) ?? 0) - editing.currentQty} (Increase)</span>
                   ) : (
-                    <span>{(parsePositiveInteger(newQtyStr) ?? 0) - editing.currentQty} (Decrease)</span>
+                    <span>{(parseNonNegativeInteger(newQtyStr) ?? 0) - editing.currentQty} (Decrease)</span>
                   )}
                 </div>
               )}
@@ -502,7 +520,7 @@ export default function ManageStockPage() {
               </button>
               <button
                 onClick={requestSaveEdit}
-                disabled={isSubmitting || !reason.trim() || reason.trim().length < 3 || (parsePositiveInteger(newQtyStr) ?? 0) < 1}
+                disabled={isSubmitting || !reason.trim() || reason.trim().length < 3 || (parseNonNegativeInteger(newQtyStr) ?? 0) < 0}
                 className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Saving...' : 'Save Changes'}
@@ -520,7 +538,7 @@ export default function ManageStockPage() {
             <div className="text-xs text-gray-700 space-y-2">
               <p><strong>SKU:</strong> {editing.skuName}</p>
               <p><strong>Current quantity:</strong> {editing.currentQty}</p>
-              <p><strong>New quantity:</strong> {parsePositiveInteger(newQtyStr) ?? 0}</p>
+              <p><strong>New quantity:</strong> {parseNonNegativeInteger(newQtyStr) ?? 0}</p>
               <p><strong>Reason:</strong> {reason.trim()}</p>
             </div>
           </ConfirmDialog>

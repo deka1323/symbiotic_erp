@@ -10,6 +10,7 @@ const updateSkuSchema = z.object({
   price: z.coerce.number().min(0).optional(),
   unit: z.string().optional(),
   isActive: z.boolean().optional(),
+  categoryId: z.string().optional().nullable(),
 })
 
 export async function GET(
@@ -22,6 +23,7 @@ export async function GET(
   try {
     const sku = await (prisma as any).sKU.findUnique({
       where: { id: params.id },
+      include: { category: true },
     })
     if (!sku) {
       return NextResponse.json({ error: 'SKU not found' }, { status: 404 })
@@ -43,12 +45,16 @@ export async function PUT(
   try {
     const body = await req.json()
     const validated = updateSkuSchema.parse(body)
+    const { categoryId, ...rest } = validated
+    const data = {
+      ...rest,
+      ...('categoryId' in body ? { categoryId: categoryId || null } : {}),
+    }
 
     const updated = await (prisma as any).sKU.update({
       where: { id: params.id },
-      data: {
-        ...validated,
-      },
+      data,
+      include: { category: true },
     })
 
     return NextResponse.json({ data: updated })

@@ -10,6 +10,7 @@ const createSkuSchema = z.object({
   price: z.coerce.number().min(0),
   unit: z.string().optional().default('packets'),
   isActive: z.boolean().optional().default(true),
+  categoryId: z.string().optional().nullable(),
 })
 
 // GET /api/basic-config/skus - list SKUs with pagination and search
@@ -79,7 +80,9 @@ export async function POST(req: NextRequest) {
         price: validated.price,
         unit: validated.unit,
         isActive: validated.isActive,
+        categoryId: validated.categoryId || null,
       },
+      include: { category: true },
     })
 
     return NextResponse.json({ data: newSku }, { status: 201 })

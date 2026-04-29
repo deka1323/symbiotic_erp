@@ -83,6 +83,12 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
     return map
   }, [skus])
 
+  // Keep options stable to avoid expensive row-by-row recomputation for large lists.
+  const skuOptions = useMemo(
+    () => skus.map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` })),
+    [skus]
+  )
+
   const focusScanner = () => {
     const el = scannerInputRef.current
     if (!el) return
@@ -286,11 +292,9 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
             ) : null}
             <div className="p-3 space-y-2 overflow-y-auto overscroll-contain h-full">
               {items.map((row, idx) => {
-                const selected = items.filter((_, i) => i !== idx).map((x) => x.skuId).filter(Boolean)
-                const options = skus.filter((s: any) => s.id === row.skuId || !selected.includes(s.id)).map((s: any) => ({ value: s.id, label: `${s.name} (${s.code})` }))
                 return (
                   <div key={idx} className="flex items-center gap-2">
-                    <SearchableSelect value={row.skuId} onChange={(v) => updateRow(idx, { skuId: v })} placeholder="SKU" options={options} className={`flex-1 ${scanMode ? 'pointer-events-none opacity-70' : ''}`} menuPortal />
+                    <SearchableSelect value={row.skuId} onChange={(v) => updateRow(idx, { skuId: v })} placeholder="SKU" options={skuOptions} className={`flex-1 ${scanMode ? 'pointer-events-none opacity-70' : ''}`} menuPortal />
                     <PositiveIntegerInput value={row.quantity} onChange={(v) => updateRow(idx, { quantity: v })} disabled={scanMode} className="w-24 px-2 py-1 text-xs border rounded disabled:bg-gray-100 disabled:text-gray-500" />
                     <button type="button" onClick={() => removeRow(idx)} disabled={scanMode} className="p-1 text-red-600 disabled:text-gray-400"><Trash2 className="w-4 h-4" /></button>
                   </div>

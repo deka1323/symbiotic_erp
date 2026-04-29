@@ -34,6 +34,7 @@ export default function SKUsPage() {
 
   useEffect(() => {
     fetchSkus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, search, categoryFilter])
 
   useEffect(() => {
@@ -161,6 +162,15 @@ export default function SKUsPage() {
       sortable: true,
       render: (row) => (
         <div className="text-xs text-gray-900">{row.name}</div>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      sortable: true,
+      sortValue: (row) => row.category?.name || '',
+      render: (row) => (
+        <span className="text-xs text-gray-700">{row.category?.name || '-'}</span>
       ),
     },
     {
@@ -312,6 +322,7 @@ export default function SKUsPage() {
       {/* Create Modal */}
       {showCreate && (
         <SKUModal
+          categories={categories}
           onSave={handleCreate}
           onClose={() => {
             setShowCreate(false)
@@ -324,6 +335,7 @@ export default function SKUsPage() {
       {editing && (
         <SKUModal
           initial={editing}
+          categories={categories}
           onSave={(p) => handleUpdate(editing.id, p)}
           onClose={() => {
             setEditing(null)
@@ -337,10 +349,12 @@ export default function SKUsPage() {
 
 function SKUModal({
   initial,
+  categories,
   onSave,
   onClose,
 }: {
   initial?: SKU
+  categories: { id: string; name: string }[]
   onSave: (payload: Partial<SKU>) => void
   onClose: () => void
 }) {
@@ -349,6 +363,7 @@ function SKUModal({
   const [description, setDescription] = useState(initial?.description || '')
   const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : '0')
   const [unit, setUnit] = useState(initial?.unit || 'packets')
+  const [categoryId, setCategoryId] = useState(initial?.categoryId || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -369,7 +384,14 @@ function SKUModal({
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      await onSave({ code, name, description: description || undefined, price: Number(price || 0), unit })
+      await onSave({
+        code,
+        name,
+        description: description || undefined,
+        price: Number(price || 0),
+        unit,
+        categoryId: categoryId || null,
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -461,6 +483,17 @@ function SKUModal({
               required
               className="block w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
               placeholder="packets, kg, etc."
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
+            <SearchableSelect
+              value={categoryId}
+              onChange={setCategoryId}
+              placeholder="Select category"
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+              className="block w-full"
+              menuPortal
             />
           </div>
           <div className="flex gap-2 justify-end pt-2">

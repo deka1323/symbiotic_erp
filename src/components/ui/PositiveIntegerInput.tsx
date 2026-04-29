@@ -48,3 +48,12 @@ export function parsePositiveInteger(s: string): number | null {
   if (Number.isNaN(n) || n < 1) return null
   return n
 }
+
+/** Parse string to non-negative integer; returns null if empty/invalid. */
+export function parseNonNegativeInteger(s: string): number | null {
+  const trimmed = s.trim()
+  if (trimmed === '') return null
+  const n = parseInt(trimmed, 10)
+  if (Number.isNaN(n) || n < 0) return null
+  return n
+}
