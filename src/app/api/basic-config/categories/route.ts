@@ -11,7 +11,11 @@ const createCategorySchema = z.object({
 
 // GET /api/basic-config/categories - list categories with pagination and search
 export async function GET(req: NextRequest) {
-  const authResult = await authorize(req, 'basic-configuration', 'category_management', 'view')
+  const categoryAuth = await authorize(req, 'basic-configuration', 'category_management', 'view')
+  const authResult =
+    'error' in categoryAuth
+      ? await authorize(req, 'basic-configuration', 'sku_management', 'view')
+      : categoryAuth
   if ('error' in authResult) return authResult.error
 
   try {

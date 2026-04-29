@@ -126,24 +126,6 @@ export async function POST(req: NextRequest) {
         }
         const sendingInventoryId = po.toInventoryId
 
-        // Verify stock availability per SKU
-        for (const item of validated.items) {
-          const stock = await tx.stock.findUnique({
-            where: {
-              inventoryId_skuId: {
-                inventoryId: sendingInventoryId,
-                skuId: item.skuId,
-              },
-            },
-          })
-          const available = stock?.quantity || 0
-          if (available < item.quantity) {
-            throw new Error(
-              `Insufficient stock for SKU ${item.skuId}. Available: ${available}, Requested: ${item.quantity}`
-            )
-          }
-        }
-
         const to = await tx.transferOrder.create({
           data: {
             toNumber,
@@ -168,14 +150,19 @@ export async function POST(req: NextRequest) {
           const oldQuantity = stockRow?.quantity ?? 0
           const newQuantity = oldQuantity - item.quantity
 
-          await tx.stock.update({
+          await tx.stock.upsert({
             where: {
               inventoryId_skuId: {
                 inventoryId: sendingInventoryId,
                 skuId: item.skuId,
               },
             },
-            data: { quantity: { decrement: item.quantity } as any },
+            update: { quantity: { decrement: item.quantity } as any },
+            create: {
+              inventoryId: sendingInventoryId,
+              skuId: item.skuId,
+              quantity: -item.quantity,
+            },
           })
 
           await tx.stockHistory.create({
@@ -212,24 +199,6 @@ export async function POST(req: NextRequest) {
         }
 
         const sendingInventoryId = validated.fromInventoryId
-
-        // Verify stock availability per SKU
-        for (const item of validated.items) {
-          const stock = await tx.stock.findUnique({
-            where: {
-              inventoryId_skuId: {
-                inventoryId: sendingInventoryId,
-                skuId: item.skuId,
-              },
-            },
-          })
-          const available = stock?.quantity || 0
-          if (available < item.quantity) {
-            throw new Error(
-              `Insufficient stock for SKU ${item.skuId}. Available: ${available}, Requested: ${item.quantity}`
-            )
-          }
-        }
 
         const skuTotals = new Map<string, number>()
         for (const item of validated.items) {
@@ -287,14 +256,19 @@ export async function POST(req: NextRequest) {
           const oldQuantity = stockRow?.quantity ?? 0
           const newQuantity = oldQuantity - item.quantity
 
-          await tx.stock.update({
+          await tx.stock.upsert({
             where: {
               inventoryId_skuId: {
                 inventoryId: sendingInventoryId,
                 skuId: item.skuId,
               },
             },
-            data: { quantity: { decrement: item.quantity } as any },
+            update: { quantity: { decrement: item.quantity } as any },
+            create: {
+              inventoryId: sendingInventoryId,
+              skuId: item.skuId,
+              quantity: -item.quantity,
+            },
           })
 
           await tx.stockHistory.create({
