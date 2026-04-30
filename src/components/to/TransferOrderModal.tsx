@@ -49,16 +49,14 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
 
   useEffect(() => {
     const load = async () => {
-      const [invRes, skuRes, empRes] = await Promise.all([
-        authFetch('/api/basic-config/inventories?page=1&pageSize=200'),
-        authFetch('/api/basic-config/skus?page=1&pageSize=200'),
+      const [optionsRes, empRes] = await Promise.all([
+        authFetch('/api/inventory/options'),
         authFetch('/api/basic-config/employees?page=1&pageSize=200'),
       ])
-      const invJson = await invRes.json().catch(() => ({}))
-      const skuJson = await skuRes.json().catch(() => ({}))
+      const optionsJson = await optionsRes.json().catch(() => ({}))
       const empJson = await empRes.json().catch(() => ({}))
-      setInventories((invJson.data || []).filter((i: any) => i.isActive))
-      setSkus((skuJson.data || []).filter((s: any) => s.isActive))
+      setInventories((optionsJson.data?.inventories || []).filter((i: any) => i.isActive))
+      setSkus((optionsJson.data?.skus || []).filter((s: any) => s.isActive))
       setEmployees(empJson.data || [])
     }
 

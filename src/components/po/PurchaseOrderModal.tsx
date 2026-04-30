@@ -53,16 +53,11 @@ export function PurchaseOrderModal({
     // Fetch inventories and SKUs for create mode
     const fetchMeta = async () => {
       try {
-        const invRes = await authFetch('/api/basic-config/inventories?page=1&pageSize=200')
-        if (invRes.ok) {
-          const invJson = await invRes.json()
-          setInventories((invJson.data || []).filter((i: any) => i.isActive))
-        }
-
-        const skuRes = await authFetch('/api/basic-config/skus?page=1&pageSize=200')
-        if (skuRes.ok) {
-          const skuJson = await skuRes.json()
-          setSkus((skuJson.data || []).filter((s: any) => s.isActive))
+        const optionsRes = await authFetch('/api/inventory/options')
+        if (optionsRes.ok) {
+          const optionsJson = await optionsRes.json()
+          setInventories((optionsJson.data?.inventories || []).filter((i: any) => i.isActive))
+          setSkus((optionsJson.data?.skus || []).filter((s: any) => s.isActive))
         }
       } catch (err) {
         console.error(err)
