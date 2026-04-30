@@ -5,6 +5,7 @@ import { DataTable, Column, Action } from '@/components/DataTable'
 import { Plus, Store, Users, Link2, CheckCircle, XCircle, Edit } from 'lucide-react'
 import { authFetch } from '@/lib/fetch'
 import { PermissionGate } from '@/components/PermissionGate'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface InventoryOption {
   id: string
@@ -70,6 +71,9 @@ export default function POSManagementPage() {
   const [selectedMenuSkuIds, setSelectedMenuSkuIds] = useState<string[]>([])
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const [editingMenu, setEditingMenu] = useState<SkuMenuRow | null>(null)
+  const [copySourcePosId, setCopySourcePosId] = useState('')
+  const [showCopyConfirm, setShowCopyConfirm] = useState(false)
+  const [copyLoading, setCopyLoading] = useState(false)
 
   useEffect(() => {
     void fetchPOS()
@@ -265,6 +269,57 @@ export default function POSManagementPage() {
       await fetchSkuMenuRows(selectedPosId)
     } finally {
       setBulkActionLoading(false)
+    }
+  }
+
+  const requestCopyMenu = () => {
+    if (!selectedPosId) {
+      setError('Select target POS first.')
+      return
+    }
+    if (!copySourcePosId || copySourcePosId === selectedPosId) {
+      setError('Select a different source POS to copy from.')
+      return
+    }
+    setError(null)
+    setShowCopyConfirm(true)
+  }
+
+  const handleCopyMenu = async () => {
+    if (!selectedPosId || !copySourcePosId || copySourcePosId === selectedPosId) return
+    setShowCopyConfirm(false)
+    setCopyLoading(true)
+    setError(null)
+    try {
+      const sourceRes = await authFetch(`/api/pos-admin/pos/${copySourcePosId}/menu?mode=all-skus`)
+      if (!sourceRes.ok) {
+        const body = await sourceRes.json().catch(() => ({}))
+        throw new Error(body.error || 'Failed to read source POS menu')
+      }
+      const sourceBody = await sourceRes.json()
+      const sourceRows = (sourceBody.data || []) as SkuMenuRow[]
+      const sourceMenuItems = sourceRows
+        .filter((r) => r.inMenu)
+        .map((r) => ({ skuId: r.skuId, price: String(r.menuPrice ?? r.skuPrice) }))
+
+      if (sourceMenuItems.length === 0) {
+        throw new Error('Source POS has no menu items to copy.')
+      }
+
+      const copyRes = await authFetch(`/api/pos-admin/pos/${selectedPosId}/menu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: sourceMenuItems }),
+      })
+      if (!copyRes.ok) {
+        const body = await copyRes.json().catch(() => ({}))
+        throw new Error(body.error || 'Failed to copy menu')
+      }
+      await fetchSkuMenuRows(selectedPosId)
+    } catch (err: any) {
+      setError(err.message || 'Failed to copy menu')
+    } finally {
+      setCopyLoading(false)
     }
   }
 
@@ -485,6 +540,27 @@ export default function POSManagementPage() {
                 </option>
               ))}
             </select>
+            <select
+              value={copySourcePosId}
+              onChange={(e) => setCopySourcePosId(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg"
+            >
+              <option value="">Copy menu from POS</option>
+              {items
+                .filter((p) => p.id !== selectedPosId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.code} - {p.name}
+                  </option>
+                ))}
+            </select>
+            <button
+              disabled={!selectedPos || !copySourcePosId || copyLoading}
+              onClick={() => requestCopyMenu()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-50"
+            >
+              {copyLoading ? 'Copying...' : 'Copy Menu'}
+            </button>
             <input
               value={menuSearch}
               onChange={(e) => setMenuSearch(e.target.value)}
@@ -568,6 +644,20 @@ export default function POSManagementPage() {
           onSave={handleUpdateMenuItem}
         />
       )}
+
+      <ConfirmDialog
+        open={showCopyConfirm}
+        title="Copy POS menu?"
+        onConfirm={handleCopyMenu}
+        onCancel={() => setShowCopyConfirm(false)}
+        confirmLabel="Yes, copy menu"
+        loading={copyLoading}
+      >
+        <div className="text-xs text-gray-700 space-y-1">
+          <p>This will copy all menu SKUs and menu prices from the selected source POS to the current POS.</p>
+          <p>Existing matching SKUs will be updated with source menu price; non-matching existing SKUs are not removed.</p>
+        </div>
+      </ConfirmDialog>
     </div>
   )
 }
