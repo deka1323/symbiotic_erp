@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '25')
     const onlyManageStock = searchParams.get('onlyManageStock') === 'true'
+    const onlyConsumption = searchParams.get('onlyConsumption') === 'true'
 
     const where: any = {}
     if (inventoryId) where.inventoryId = inventoryId
@@ -27,7 +28,11 @@ export async function GET(req: NextRequest) {
         { reason: { not: { contains: 'Production batch' } } },
         { reason: { not: { contains: 'Transfer Order' } } },
         { reason: { not: { contains: 'Receive Order' } } },
+        { reason: { not: { contains: 'Consumption - ' } } },
       ]
+    }
+    if (onlyConsumption) {
+      where.reason = { contains: 'Consumption - ' }
     }
 
     const [history, total] = await Promise.all([
