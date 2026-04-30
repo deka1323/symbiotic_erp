@@ -8,11 +8,7 @@ import { PermissionGate } from '@/components/PermissionGate'
 import { authFetch } from '@/lib/fetch'
 import { PositiveIntegerInput, parseNonNegativeInteger } from '@/components/ui/PositiveIntegerInput'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { formatSiteDateAndTime, formatSiteNumber } from '@/lib/dates'
-
-/** Fixed audit reason for the temporary migration UI (must satisfy API min length). */
-const TEMP_STOCK_REASON = 'Initial stock migration (temporary UI)'
 
 export default function ManageStockPage() {
   const { selectedInventory } = useInventoryContext()
@@ -46,11 +42,6 @@ export default function ManageStockPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
 
-  /** Temporary migration: pick any active SKU and set absolute quantity for the header-selected inventory. */
-  const [bulkSkuOptions, setBulkSkuOptions] = useState<{ value: string; label: string }[]>([])
-  const [bulkSkuId, setBulkSkuId] = useState('')
-  const [bulkQtyStr, setBulkQtyStr] = useState('')
-  const [bulkSaving, setBulkSaving] = useState(false)
 
   const fetchStocks = async () => {
     if (!selectedInventory) {
@@ -151,34 +142,6 @@ export default function ManageStockPage() {
     fetchStocks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInventory, searchQuery])
-
-  useEffect(() => {
-    if (!selectedInventory) {
-      setBulkSkuOptions([])
-      setBulkSkuId('')
-      setBulkQtyStr('')
-      return
-    }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await authFetch('/api/inventory/options')
-        if (!res.ok || cancelled) return
-        const j = await res.json()
-        const skus = (j.data?.skus || []) as { id: string; code: string; name: string; isActive?: boolean }[]
-        const opts = skus
-          .filter((s) => s.isActive !== false)
-          .map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))
-          .sort((a, b) => a.label.localeCompare(b.label))
-        if (!cancelled) setBulkSkuOptions(opts)
-      } catch {
-        if (!cancelled) setBulkSkuOptions([])
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [selectedInventory])
 
   useEffect(() => {
     fetchHistory()
@@ -286,47 +249,6 @@ export default function ManageStockPage() {
     }
     setError(null)
     setShowConsumptionConfirm(true)
-  }
-
-  const saveBulkStock = async () => {
-    if (!selectedInventory?.id) return
-    if (!bulkSkuId.trim()) {
-      setError('Select a SKU.')
-      return
-    }
-    const qty = parseNonNegativeInteger(bulkQtyStr)
-    if (qty == null) {
-      setError('Enter a quantity (0 or greater).')
-      return
-    }
-    setBulkSaving(true)
-    setError(null)
-    try {
-      const res = await authFetch('/api/inventory/stock', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inventoryId: selectedInventory.id,
-          skuId: bulkSkuId.trim(),
-          newQuantity: qty,
-          reason: TEMP_STOCK_REASON,
-        }),
-      })
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}))
-        throw new Error(errBody.error || 'Failed to set stock')
-      }
-      setBulkSkuId('')
-      setBulkQtyStr('')
-      setSuccessMessage('Stock updated for selected SKU.')
-      fetchStocks()
-      fetchHistory()
-      fetchConsumptionHistory()
-    } catch (err: any) {
-      setError(err.message || 'Failed to set stock')
-    } finally {
-      setBulkSaving(false)
-    }
   }
 
   const saveEdit = async () => {
@@ -574,48 +496,7 @@ export default function ManageStockPage() {
         </div>
       )}
 
-      {/* Temporary: set absolute stock for any SKU (migration). Remove this block after cutover. */}
-      {selectedInventory && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 shadow-sm">
-          <p className="text-xs font-semibold text-amber-900">Temporary — set stock by SKU</p>
-          <p className="text-[11px] text-amber-800/90 mt-1">
-            Uses the inventory selected in the header. Enter the <strong>final</strong> on-hand quantity; it{' '}
-            <strong>replaces</strong> the current amount (does not add). Recorded in history with a fixed reason. Remove
-            this section once opening balances are entered.
-          </p>
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <div className="min-w-[220px] flex-1">
-              <label className="block text-[10px] font-medium text-amber-900/90 mb-1">SKU</label>
-              <SearchableSelect
-                value={bulkSkuId}
-                onChange={setBulkSkuId}
-                placeholder="Search or select SKU…"
-                options={bulkSkuOptions}
-                combobox
-                menuPortal
-                className="w-full"
-              />
-            </div>
-            <div className="w-full sm:w-32">
-              <label className="block text-[10px] font-medium text-amber-900/90 mb-1">Quantity</label>
-              <PositiveIntegerInput
-                value={bulkQtyStr}
-                onChange={setBulkQtyStr}
-                placeholder="0"
-                className="w-full px-3 py-2 text-sm border border-amber-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void saveBulkStock()}
-              disabled={bulkSaving || !bulkSkuId.trim()}
-              className="px-4 py-2 text-xs font-semibold text-white bg-amber-700 rounded-lg hover:bg-amber-800 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {bulkSaving ? 'Saving…' : 'Set stock'}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Temporary stock reset functionality intentionally disabled for now. */}
 
       {/* Messages */}
       {error && (

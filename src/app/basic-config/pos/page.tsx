@@ -73,7 +73,7 @@ export default function POSManagementPage() {
 
   useEffect(() => {
     void fetchPOS()
-    void fetchStoreInventories()
+    void fetchLinkableInventories()
   }, [])
 
   useEffect(() => {
@@ -111,11 +111,11 @@ export default function POSManagementPage() {
     }
   }
 
-  const fetchStoreInventories = async () => {
+  const fetchLinkableInventories = async () => {
     try {
-      const res = await authFetch('/api/basic-config/inventories?page=1&pageSize=500&type=STORE')
+      const res = await authFetch('/api/basic-config/inventories?page=1&pageSize=500')
       const body = await res.json()
-      setInventories((body.data || []).filter((x: InventoryOption) => x.type === 'STORE'))
+      setInventories((body.data || []).filter((x: InventoryOption) => x.isActive))
     } catch {
       setInventories([])
     }
@@ -378,7 +378,7 @@ export default function POSManagementPage() {
       <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200/80 px-4 py-3 shadow-sm">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">POS Management</h2>
-          <p className="text-[11px] text-gray-500 mt-0.5">Create POS, link STORE inventory, and manage POS users</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">Create POS, link inventory, and manage POS users</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 rounded-lg border border-blue-100">
@@ -644,14 +644,14 @@ function POSModal({
           <input value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg" required />
         </div>
         <div>
-          <label className="block text-xs mb-1">Linked STORE Inventory</label>
+          <label className="block text-xs mb-1">Linked Inventory</label>
           <select
             value={linkedInventoryId}
             onChange={(e) => setLinkedInventoryId(e.target.value)}
             className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg"
             required
           >
-            <option value="">Select STORE inventory</option>
+            <option value="">Select inventory</option>
             {inventories.map((inv) => (
               <option key={inv.id} value={inv.id}>
                 {inv.code} - {inv.name}

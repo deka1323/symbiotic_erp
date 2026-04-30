@@ -10,8 +10,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const inventoryId = body.linkedInventoryId as string | undefined
   if (inventoryId) {
     const inventory = await prisma.inventory.findUnique({ where: { id: inventoryId } })
-    if (!inventory || inventory.type !== 'STORE') {
-      return NextResponse.json({ error: 'Only STORE inventory can be linked to POS' }, { status: 400 })
+    if (!inventory || !['STORE', 'PRODUCTION', 'HUB'].includes(inventory.type)) {
+      return NextResponse.json({ error: 'Only STORE, PRODUCTION, or HUB inventory can be linked to POS' }, { status: 400 })
     }
   }
 
