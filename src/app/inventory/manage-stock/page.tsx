@@ -6,7 +6,7 @@ import { useInventoryContext } from '@/contexts/InventoryContext'
 import { Package, X, CheckCircle, XCircle, AlertCircle, Filter, Layers, Search } from 'lucide-react'
 import { PermissionGate } from '@/components/PermissionGate'
 import { authFetch } from '@/lib/fetch'
-import { PositiveIntegerInput, parseNonNegativeInteger } from '@/components/ui/PositiveIntegerInput'
+import { PositiveIntegerInput, parseNonNegativeInteger, parseSignedStockInteger } from '@/components/ui/PositiveIntegerInput'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatSiteDateAndTime, formatSiteNumber } from '@/lib/dates'
 
@@ -223,9 +223,9 @@ export default function ManageStockPage() {
       setError('Reason must be at least 3 characters')
       return
     }
-    const qty = parseNonNegativeInteger(newQtyStr)
-    if (qty == null || qty < 0) {
-      setError('Quantity must be 0 or greater.')
+    const qty = parseSignedStockInteger(newQtyStr)
+    if (qty == null) {
+      setError('Enter a valid whole number for quantity.')
       return
     }
     setError(null)
@@ -239,10 +239,6 @@ export default function ManageStockPage() {
       setError('Consumption quantity must be at least 1.')
       return
     }
-    if (qty > consumptionEditing.currentQty) {
-      setError('Consumption quantity cannot exceed available stock.')
-      return
-    }
     if (consumptionReasonType === 'OTHER' && consumptionOtherReason.trim().length < 3) {
       setError('Please enter at least 3 characters for Other Consumption reason.')
       return
@@ -253,9 +249,9 @@ export default function ManageStockPage() {
 
   const saveEdit = async () => {
     if (!editing) return
-    const qty = parseNonNegativeInteger(newQtyStr)
-    if (qty == null || qty < 0) {
-      setError('Quantity must be 0 or greater.')
+    const qty = parseSignedStockInteger(newQtyStr)
+    if (qty == null) {
+      setError('Enter a valid whole number for quantity.')
       return
     }
     setIsSubmitting(true)
@@ -336,7 +332,19 @@ export default function ManageStockPage() {
   const stockColumns: Column<any>[] = [
     { key: 'skuName', header: 'SKU Name', render: (r) => <span className="text-xs font-medium text-gray-900">{r.sku?.name || '—'}</span> },
     { key: 'skuCode', header: 'SKU Code', render: (r) => <span className="text-xs text-gray-600">{r.sku?.code || r.skuId || '—'}</span> },
-    { key: 'totalQuantity', header: 'Quantity', render: (r) => <span className="text-xs font-semibold text-gray-900 tabular-nums">{r.totalQuantity}</span> },
+    {
+      key: 'totalQuantity',
+      header: 'Quantity',
+      render: (r) => (
+        <span
+          className={`text-xs font-semibold tabular-nums ${
+            Number(r.totalQuantity) < 0 ? 'text-rose-600' : 'text-gray-900'
+          }`}
+        >
+          {r.totalQuantity}
+        </span>
+      ),
+    },
     {
       key: 'actions',
       header: 'Actions',
@@ -788,29 +796,34 @@ export default function ManageStockPage() {
                   <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-1">
                     New Quantity <span className="text-red-500">*</span>
                   </label>
-                  <PositiveIntegerInput
+                  <input
+                    type="number"
+                    step={1}
                     value={newQtyStr}
-                    onChange={setNewQtyStr}
-                    className="block w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                    placeholder="Enter new quantity"
+                    onChange={(e) => setNewQtyStr(e.target.value)}
+                    className="block w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white tabular-nums"
+                    placeholder="Enter new quantity (can be negative)"
                   />
                 </div>
               </div>
 
               {/* Quantity Change Indicator */}
-              {(parseNonNegativeInteger(newQtyStr) ?? 0) !== editing.currentQty && (
-                <div className={`px-3 py-2 rounded-lg border text-xs ${
-                  (parseNonNegativeInteger(newQtyStr) ?? 0) > editing.currentQty
-                    ? 'bg-green-50 border-green-200 text-green-700'
-                    : 'bg-red-50 border-red-200 text-red-700'
-                }`}>
-                  {(parseNonNegativeInteger(newQtyStr) ?? 0) > editing.currentQty ? (
-                    <span>+{(parseNonNegativeInteger(newQtyStr) ?? 0) - editing.currentQty} (Increase)</span>
-                  ) : (
-                    <span>{(parseNonNegativeInteger(newQtyStr) ?? 0) - editing.currentQty} (Decrease)</span>
-                  )}
-                </div>
-              )}
+              {(() => {
+                const next = parseSignedStockInteger(newQtyStr)
+                if (next == null || next === editing.currentQty) return null
+                const delta = next - editing.currentQty
+                return (
+                  <div
+                    className={`px-3 py-2 rounded-lg border text-xs ${
+                      delta > 0
+                        ? 'bg-green-50 border-green-200 text-green-700'
+                        : 'bg-red-50 border-red-200 text-red-700'
+                    }`}
+                  >
+                    {delta > 0 ? <span>+{delta} (Increase)</span> : <span>{delta} (Decrease)</span>}
+                  </div>
+                )
+              })()}
 
               {/* Reason */}
               <div>
@@ -852,7 +865,12 @@ export default function ManageStockPage() {
               </button>
               <button
                 onClick={requestSaveEdit}
-                disabled={isSubmitting || !reason.trim() || reason.trim().length < 3 || (parseNonNegativeInteger(newQtyStr) ?? 0) < 0}
+                disabled={
+                  isSubmitting ||
+                  !reason.trim() ||
+                  reason.trim().length < 3 ||
+                  parseSignedStockInteger(newQtyStr) == null
+                }
                 className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Saving...' : 'Save Changes'}
@@ -870,7 +888,7 @@ export default function ManageStockPage() {
             <div className="text-xs text-gray-700 space-y-2">
               <p><strong>SKU:</strong> {editing.skuName}</p>
               <p><strong>Current quantity:</strong> {editing.currentQty}</p>
-              <p><strong>New quantity:</strong> {parseNonNegativeInteger(newQtyStr) ?? 0}</p>
+              <p><strong>New quantity:</strong> {parseSignedStockInteger(newQtyStr) ?? '—'}</p>
               <p><strong>Reason:</strong> {reason.trim()}</p>
             </div>
           </ConfirmDialog>

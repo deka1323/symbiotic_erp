@@ -57,3 +57,12 @@ export function parseNonNegativeInteger(s: string): number | null {
   if (Number.isNaN(n) || n < 0) return null
   return n
 }
+
+/** Signed integer for stock quantities (allows negative). */
+export function parseSignedStockInteger(s: string): number | null {
+  const trimmed = s.trim()
+  if (trimmed === '') return null
+  const n = parseInt(trimmed, 10)
+  if (Number.isNaN(n)) return null
+  return n
+}

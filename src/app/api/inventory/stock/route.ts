@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 const editStockSchema = z.object({
   inventoryId: z.string().uuid(),
   skuId: z.string().uuid(),
-  newQuantity: z.number().int().min(0),
+  newQuantity: z.number().int(),
   reason: z.string().min(3).max(1000),
 })
 
@@ -35,7 +35,6 @@ export async function GET(req: NextRequest) {
 
     const where: any = {
       inventoryId,
-      quantity: { gt: 0 },
     }
     if (skuIdParam) where.skuId = skuIdParam
     if (search) {
@@ -90,7 +89,7 @@ export async function PUT(req: NextRequest) {
         },
       })
 
-      const oldQuantity = existing?.quantity || 0
+      const oldQuantity = existing?.quantity ?? 0
 
       const stock = await tx.stock.upsert({
         where: {
@@ -162,10 +161,7 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      const oldQuantity = existing?.quantity || 0
-      if (oldQuantity < validated.quantity) {
-        throw new Error('Consumption quantity exceeds available stock.')
-      }
+      const oldQuantity = existing?.quantity ?? 0
       const newQuantity = oldQuantity - validated.quantity
 
       const stock = await tx.stock.upsert({
@@ -201,9 +197,6 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors }, { status: 400 })
-    }
-    if (error instanceof Error && error.message === 'Consumption quantity exceeds available stock.') {
-      return NextResponse.json({ error: error.message }, { status: 400 })
     }
     console.error('Consume stock error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
