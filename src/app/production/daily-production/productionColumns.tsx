@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { Column, DataTable } from '@/components/DataTable'
 import { useInventoryContext } from '@/contexts/InventoryContext'
 import { Plus, Package, X, Trash2, CheckCircle, AlertCircle, ScanLine } from 'lucide-react'
@@ -91,10 +91,10 @@ export default function DailyProductionPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [scanMode, setScanMode] = useState(false)
-  const [scanCode, setScanCode] = useState('')
   const [scanFeedback, setScanFeedback] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
-  const scannerInputRef = useRef<HTMLInputElement>(null)
+  const scanBufferRef = useRef('')
+  const scanResetTimerRef = useRef<number | null>(null)
 
   const fetchSkus = async () => {
     try {
@@ -177,20 +177,7 @@ export default function DailyProductionPage() {
     return map
   }, [skus])
 
-  const focusScanner = () => {
-    const el = scannerInputRef.current
-    if (!el) return
-    el.focus()
-    el.select()
-  }
-
-  useEffect(() => {
-    if (!scanMode) return
-    const t = window.setTimeout(() => focusScanner(), 0)
-    return () => window.clearTimeout(t)
-  }, [scanMode])
-
-  const applyScannedCode = (rawCode: string) => {
+  const applyScannedCode = useCallback((rawCode: string) => {
     const code = rawCode.trim()
     if (!code) return
     const sku = skuByCode.get(code.toLowerCase())
@@ -208,7 +195,53 @@ export default function DailyProductionPage() {
       return [...cleanRows, { skuId: sku.id, quantity: '1' }]
     })
     setScanFeedback(`Added ${sku.name} (${sku.code})`)
-  }
+  }, [skuByCode])
+
+  useEffect(() => {
+    if (!scanMode) {
+      scanBufferRef.current = ''
+      if (scanResetTimerRef.current) {
+        window.clearTimeout(scanResetTimerRef.current)
+        scanResetTimerRef.current = null
+      }
+      return
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) return
+
+      if (e.key === 'Enter') {
+        const code = scanBufferRef.current.trim()
+        scanBufferRef.current = ''
+        if (scanResetTimerRef.current) {
+          window.clearTimeout(scanResetTimerRef.current)
+          scanResetTimerRef.current = null
+        }
+        if (code) applyScannedCode(code)
+        e.preventDefault()
+        return
+      }
+
+      if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return
+      scanBufferRef.current += e.key
+      if (scanResetTimerRef.current) window.clearTimeout(scanResetTimerRef.current)
+      scanResetTimerRef.current = window.setTimeout(() => {
+        scanBufferRef.current = ''
+        scanResetTimerRef.current = null
+      }, 120)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (scanResetTimerRef.current) {
+        window.clearTimeout(scanResetTimerRef.current)
+        scanResetTimerRef.current = null
+      }
+    }
+  }, [scanMode, applyScannedCode])
 
   const requestCreateBatch = () => {
     setErrorMessage(null)
@@ -354,7 +387,6 @@ export default function DailyProductionPage() {
                       type="button"
                       onClick={() => {
                         setScanMode((v) => !v)
-                        setScanCode('')
                         setScanFeedback(null)
                       }}
                       className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${
@@ -372,25 +404,6 @@ export default function DailyProductionPage() {
                     <div className="text-[11px] text-blue-800">
                       Scan mode is ON. Scan barcode continuously; each scan increases quantity automatically.
                     </div>
-                    <input
-                      ref={scannerInputRef}
-                      value={scanCode}
-                      onChange={(e) => setScanCode(e.target.value)}
-                      onBlur={() => {
-                        if (scanMode) focusScanner()
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'Enter') return
-                        e.preventDefault()
-                        applyScannedCode(scanCode)
-                        setScanCode('')
-                        focusScanner()
-                      }}
-                      className="absolute opacity-0 pointer-events-none h-0 w-0"
-                      aria-hidden
-                      tabIndex={-1}
-                      autoComplete="off"
-                    />
                     <div className="mt-1 text-[11px] text-blue-700">
                       {scanFeedback || 'Ready for scan...'}
                     </div>
@@ -399,7 +412,7 @@ export default function DailyProductionPage() {
                 {items.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-8 text-center text-xs text-gray-500">No items yet. Click &quot;Add item&quot; to add SKU and quantity.</div>
                 ) : (
-                  <div className="space-y-2 min-h-0 overflow-y-auto overscroll-contain pr-1">
+                  <div className="space-y-2 min-h-0 overflow-y-auto overscroll-contain pr-1 pb-4">
                     {items.map((it, idx) => {
                       const selectedInOtherRows = items.filter((_, i) => i !== idx).map((i) => i.skuId).filter(Boolean)
                       const skuOptions = skus

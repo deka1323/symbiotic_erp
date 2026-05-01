@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X, Plus, Trash2, ScanLine } from 'lucide-react'
 import { authFetch } from '@/lib/fetch'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -22,7 +22,8 @@ interface TransferOrderModalProps {
 
 export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCreated, onError }: TransferOrderModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
-  const scannerInputRef = useRef<HTMLInputElement>(null)
+  const scanBufferRef = useRef('')
+  const scanResetTimerRef = useRef<number | null>(null)
   const [inventories, setInventories] = useState<any[]>([])
   const [skus, setSkus] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
@@ -33,7 +34,6 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
   const [scanMode, setScanMode] = useState(false)
-  const [scanCode, setScanCode] = useState('')
   const [scanFeedback, setScanFeedback] = useState<string | null>(null)
 
   useEffect(() => {
@@ -87,20 +87,7 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
     [skus]
   )
 
-  const focusScanner = () => {
-    const el = scannerInputRef.current
-    if (!el) return
-    el.focus()
-    el.select()
-  }
-
-  useEffect(() => {
-    if (!scanMode) return
-    const t = window.setTimeout(() => focusScanner(), 0)
-    return () => window.clearTimeout(t)
-  }, [scanMode])
-
-  const applyScannedCode = (rawCode: string) => {
+  const applyScannedCode = useCallback((rawCode: string) => {
     const code = rawCode.trim()
     if (!code) return
     const sku = skuByCode.get(code.toLowerCase())
@@ -118,7 +105,53 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
       return [...cleanRows, { skuId: sku.id, quantity: '1' }]
     })
     setScanFeedback(`Added ${sku.name} (${sku.code})`)
-  }
+  }, [skuByCode])
+
+  useEffect(() => {
+    if (!scanMode) {
+      scanBufferRef.current = ''
+      if (scanResetTimerRef.current) {
+        window.clearTimeout(scanResetTimerRef.current)
+        scanResetTimerRef.current = null
+      }
+      return
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) return
+
+      if (e.key === 'Enter') {
+        const code = scanBufferRef.current.trim()
+        scanBufferRef.current = ''
+        if (scanResetTimerRef.current) {
+          window.clearTimeout(scanResetTimerRef.current)
+          scanResetTimerRef.current = null
+        }
+        if (code) applyScannedCode(code)
+        e.preventDefault()
+        return
+      }
+
+      if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return
+      scanBufferRef.current += e.key
+      if (scanResetTimerRef.current) window.clearTimeout(scanResetTimerRef.current)
+      scanResetTimerRef.current = window.setTimeout(() => {
+        scanBufferRef.current = ''
+        scanResetTimerRef.current = null
+      }, 120)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (scanResetTimerRef.current) {
+        window.clearTimeout(scanResetTimerRef.current)
+        scanResetTimerRef.current = null
+      }
+    }
+  }, [scanMode, applyScannedCode])
 
   const payloadItems = useMemo(
     () =>
@@ -238,7 +271,7 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
             />
           </div>
 
-          <div className="min-h-0 flex-1 border border-gray-200 rounded-lg overflow-hidden bg-gray-50/40">
+          <div className="min-h-0 flex-1 border border-gray-200 rounded-lg overflow-hidden bg-gray-50/40 flex flex-col">
             <div className="flex justify-between items-center px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10">
               <label className="text-xs">Items</label>
               <div className="flex items-center gap-3">
@@ -246,7 +279,6 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
                   type="button"
                   onClick={() => {
                     setScanMode((v) => !v)
-                    setScanCode('')
                     setScanFeedback(null)
                   }}
                   className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${
@@ -264,31 +296,12 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
                 <div className="text-[11px] text-blue-800">
                   Scan mode is ON. Scan barcode continuously; each scan increases quantity automatically.
                 </div>
-                <input
-                  ref={scannerInputRef}
-                  value={scanCode}
-                  onChange={(e) => setScanCode(e.target.value)}
-                  onBlur={() => {
-                    if (scanMode) focusScanner()
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Enter') return
-                    e.preventDefault()
-                    applyScannedCode(scanCode)
-                    setScanCode('')
-                    focusScanner()
-                  }}
-                  className="absolute opacity-0 pointer-events-none h-0 w-0"
-                  aria-hidden
-                  tabIndex={-1}
-                  autoComplete="off"
-                />
                 <div className="mt-1 text-[11px] text-blue-700">
                   {scanFeedback || 'Ready for scan...'}
                 </div>
               </div>
             ) : null}
-            <div className="p-3 space-y-2 overflow-y-auto overscroll-contain h-full">
+            <div className="p-3 space-y-2 overflow-y-auto overscroll-contain min-h-0 flex-1 pb-4">
               {items.map((row, idx) => {
                 return (
                   <div key={idx} className="flex items-center gap-2">
