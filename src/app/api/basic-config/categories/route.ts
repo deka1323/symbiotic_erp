@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { authorize } from '@/lib/middleware/auth'
+import { authMiddleware } from '@/lib/middleware/auth'
 import { prisma } from '@/lib/prisma'
 
 const createCategorySchema = z.object({
@@ -11,15 +12,18 @@ const createCategorySchema = z.object({
 
 // GET /api/basic-config/categories - list categories with pagination and search
 export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const light = searchParams.get('light') === 'true'
   const categoryAuth = await authorize(req, 'basic-configuration', 'category_management', 'view')
-  const authResult =
-    'error' in categoryAuth
-      ? await authorize(req, 'basic-configuration', 'sku_management', 'view')
-      : categoryAuth
+  const skuViewAuth = 'error' in categoryAuth
+    ? await authorize(req, 'basic-configuration', 'sku_management', 'view')
+    : categoryAuth
+  const authResult = 'error' in skuViewAuth && light
+    ? await authMiddleware(req)
+    : skuViewAuth
   if ('error' in authResult) return authResult.error
 
   try {
-    const { searchParams } = new URL(req.url)
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '10')
     const search = searchParams.get('search') || ''

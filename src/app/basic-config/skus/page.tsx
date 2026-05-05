@@ -40,7 +40,7 @@ export default function SKUsPage() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await authFetch('/api/basic-config/categories?page=1&pageSize=200')
+        const res = await authFetch('/api/basic-config/categories?page=1&pageSize=500&isActive=true&light=true')
         if (res.ok) {
           const data = await res.json()
           setCategories((data.data || []).map((c: any) => ({ id: c.id, name: c.name })))

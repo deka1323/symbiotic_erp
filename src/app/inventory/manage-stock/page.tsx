@@ -38,6 +38,10 @@ export default function ManageStockPage() {
   const [showConsumptionConfirm, setShowConsumptionConfirm] = useState(false)
   const [isConsumptionSubmitting, setIsConsumptionSubmitting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [addSkuId, setAddSkuId] = useState('')
+  const [addQtyStr, setAddQtyStr] = useState('')
+  const [addReason, setAddReason] = useState('')
+  const [isAddingStock, setIsAddingStock] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -329,6 +333,62 @@ export default function ManageStockPage() {
     }
   }
 
+  const handleAddStock = async () => {
+    if (!selectedInventory) {
+      setError('Please select an inventory first.')
+      return
+    }
+    const qty = parseNonNegativeInteger(addQtyStr)
+    if (!addSkuId) {
+      setError('Please select a SKU to add stock.')
+      return
+    }
+    if (qty == null || qty < 1) {
+      setError('Add quantity must be at least 1.')
+      return
+    }
+    if (addReason.trim().length < 3) {
+      setError('Reason must be at least 3 characters.')
+      return
+    }
+
+    const stockItem = stocks.find((s) => s.skuId === addSkuId)
+    const currentQty = Number(stockItem?.totalQuantity || 0)
+    const newQty = currentQty + qty
+
+    setIsAddingStock(true)
+    setError(null)
+    try {
+      const res = await authFetch('/api/inventory/stock', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inventoryId: selectedInventory.id,
+          skuId: addSkuId,
+          newQuantity: newQty,
+          reason: `Add Stock - ${addReason.trim()}`,
+        }),
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to add stock')
+      }
+
+      setAddSkuId('')
+      setAddQtyStr('')
+      setAddReason('')
+      setSuccessMessage('Stock added successfully!')
+      fetchStocks()
+      fetchHistory()
+      fetchConsumptionHistory()
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || 'Failed to add stock')
+    } finally {
+      setIsAddingStock(false)
+    }
+  }
+
   const stockColumns: Column<any>[] = [
     { key: 'skuName', header: 'SKU Name', render: (r) => <span className="text-xs font-medium text-gray-900">{r.sku?.name || '—'}</span> },
     { key: 'skuCode', header: 'SKU Code', render: (r) => <span className="text-xs text-gray-600">{r.sku?.code || r.skuId || '—'}</span> },
@@ -504,7 +564,57 @@ export default function ManageStockPage() {
         </div>
       )}
 
-      {/* Temporary stock reset functionality intentionally disabled for now. */}
+      {selectedInventory && (
+        <div className="bg-white rounded-lg border border-gray-200/80 px-4 py-3 shadow-sm">
+          <h3 className="text-xs font-semibold text-gray-900 mb-2">Add Stock</h3>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+            <div className="md:col-span-5">
+              <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-1">SKU</label>
+              <select
+                value={addSkuId}
+                onChange={(e) => setAddSkuId(e.target.value)}
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              >
+                <option value="">Select SKU</option>
+                {stocks.map((s) => (
+                  <option key={s.skuId} value={s.skuId}>
+                    {s.sku?.name || s.sku?.code || s.skuId} ({s.sku?.code || '—'})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-1">Quantity</label>
+              <PositiveIntegerInput
+                value={addQtyStr}
+                onChange={setAddQtyStr}
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                placeholder="0"
+              />
+            </div>
+            <div className="md:col-span-4">
+              <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-1">Reason</label>
+              <input
+                type="text"
+                value={addReason}
+                onChange={(e) => setAddReason(e.target.value)}
+                placeholder="e.g. New inward stock"
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              />
+            </div>
+            <div className="md:col-span-1">
+              <button
+                type="button"
+                onClick={handleAddStock}
+                disabled={isAddingStock}
+                className="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAddingStock ? 'Adding...' : 'Add'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       {error && (
