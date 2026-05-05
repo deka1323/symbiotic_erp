@@ -13,6 +13,7 @@ import { formatSiteDateAndTime, formatSiteNumber } from '@/lib/dates'
 export default function ManageStockPage() {
   const { selectedInventory } = useInventoryContext()
   const [stocks, setStocks] = useState<any[]>([])
+  const [allSkus, setAllSkus] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
   const [consumptionHistory, setConsumptionHistory] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -77,6 +78,20 @@ export default function ManageStockPage() {
       setStocks([])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchAllSkus = async () => {
+    try {
+      const res = await authFetch('/api/inventory/options')
+      if (!res.ok) {
+        throw new Error('Failed to fetch SKU options')
+      }
+      const data = await res.json()
+      setAllSkus((data.data?.skus || []).filter((s: any) => s.isActive))
+    } catch (err) {
+      console.error(err)
+      setAllSkus([])
     }
   }
 
@@ -146,6 +161,10 @@ export default function ManageStockPage() {
     fetchStocks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInventory, searchQuery])
+
+  useEffect(() => {
+    fetchAllSkus()
+  }, [])
 
   useEffect(() => {
     fetchHistory()
@@ -576,9 +595,9 @@ export default function ManageStockPage() {
                 className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
               >
                 <option value="">Select SKU</option>
-                {stocks.map((s) => (
-                  <option key={s.skuId} value={s.skuId}>
-                    {s.sku?.name || s.sku?.code || s.skuId} ({s.sku?.code || '—'})
+                {allSkus.map((sku) => (
+                  <option key={sku.id} value={sku.id}>
+                    {sku.name || sku.code || sku.id} ({sku.code || '—'})
                   </option>
                 ))}
               </select>
