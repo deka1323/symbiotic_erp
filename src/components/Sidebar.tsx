@@ -70,14 +70,14 @@ export function Sidebar() {
           return permissionFiltered.filter((item) => {
             if (item.isStandalone) return true
             const href = item.href || ''
-            return href.startsWith('/production') || href.startsWith('/inventory')
+            return href.startsWith('/production') || href.startsWith('/inventory') || href.startsWith('/sales')
           })
         }
-        // HUB and STORE: only Inventory group (plus Home)
+        // HUB and STORE: only Inventory and Sales groups (plus Home)
         return permissionFiltered.filter((item) => {
           if (item.isStandalone) return true
           const href = item.href || ''
-          return href.startsWith('/inventory')
+          return href.startsWith('/inventory') || href.startsWith('/sales')
         })
       }
 

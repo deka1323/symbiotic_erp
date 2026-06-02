@@ -1,0 +1,259 @@
+/* Tax invoice print layout — A4 landscape-friendly */
+.invoice-print-root {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9px;
+  color: #111;
+  line-height: 1.25;
+  background: #fff;
+}
+
+.invoice-print-page {
+  width: 297mm;
+  min-height: 210mm;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 8mm 10mm;
+  box-sizing: border-box;
+  page-break-after: always;
+  position: relative;
+}
+
+.invoice-print-page:last-child {
+  page-break-after: auto;
+}
+
+.invoice-title {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  letter-spacing: 0.02em;
+}
+
+.invoice-header-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.invoice-company-block {
+  font-size: 9px;
+}
+
+.invoice-company-block .company-name {
+  font-weight: 700;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.invoice-media-block {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.invoice-media-block img {
+  display: block;
+  object-fit: contain;
+}
+
+.invoice-logo {
+  max-width: 72px;
+  max-height: 72px;
+}
+
+.invoice-qr {
+  max-width: 64px;
+  max-height: 64px;
+}
+
+.invoice-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 9px;
+}
+
+.invoice-meta-box {
+  border: 1px solid #333;
+  padding: 4px 8px;
+}
+
+.invoice-meta-box strong {
+  display: inline-block;
+  min-width: 70px;
+}
+
+.invoice-bill-to {
+  margin-bottom: 8px;
+  font-size: 9px;
+}
+
+.invoice-bill-to .label {
+  font-weight: 700;
+}
+
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 7.5px;
+}
+
+.invoice-table th,
+.invoice-table td {
+  border: 1px solid #333;
+  padding: 3px 4px;
+  vertical-align: top;
+  word-wrap: break-word;
+}
+
+.invoice-table th {
+  background: #f3f4f6;
+  font-weight: 700;
+  text-align: center;
+}
+
+.invoice-table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.invoice-table td.center {
+  text-align: center;
+}
+
+.invoice-table .item-name {
+  white-space: pre-line;
+  text-align: left;
+  font-size: 7px;
+}
+
+.invoice-table tfoot td {
+  font-weight: 700;
+}
+
+.invoice-footer-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 9px;
+}
+
+.invoice-words {
+  border: 1px solid #333;
+  padding: 6px 8px;
+  min-height: 48px;
+}
+
+.invoice-amounts {
+  border: 1px solid #333;
+}
+
+.invoice-amounts table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.invoice-amounts td {
+  border-bottom: 1px solid #ddd;
+  padding: 4px 8px;
+}
+
+.invoice-amounts td:last-child {
+  text-align: right;
+  font-weight: 600;
+}
+
+.invoice-amounts tr:last-child td {
+  border-bottom: none;
+  font-weight: 700;
+}
+
+.invoice-page2-balance {
+  margin: 8px 0;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.invoice-tax-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8px;
+  margin-bottom: 10px;
+}
+
+.invoice-tax-table th,
+.invoice-tax-table td {
+  border: 1px solid #333;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.invoice-tax-table td.amount {
+  text-align: right;
+}
+
+.invoice-bank {
+  margin-top: 8px;
+  font-size: 9px;
+}
+
+.invoice-bank .heading {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.invoice-sign {
+  margin-top: 24px;
+  text-align: right;
+  font-size: 9px;
+}
+
+.invoice-empty-row td {
+  height: 22px;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .invoice-print-root {
+    width: 100%;
+  }
+
+  .invoice-print-page {
+    width: 100%;
+    min-height: auto;
+    padding: 0;
+    margin: 0;
+  }
+}
+
+@media screen {
+  .invoice-print-shell {
+    background: #e5e7eb;
+    padding: 16px;
+    min-height: 100vh;
+  }
+
+  .invoice-print-page {
+    background: #fff;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+    margin-bottom: 16px;
+  }
+}

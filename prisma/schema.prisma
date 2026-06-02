@@ -238,10 +238,105 @@ model Inventory {
   userInventories    UserInventory[]
   StockHistory       StockHistory[]
   pos                POS[]
+  customers          Customer[]
+  salesInvoiceBasics SalesInvoiceBasics?
+  salesInvoices      SalesInvoice[]
 
   @@index([code])
   @@index([type])
   @@map("inventories")
+}
+
+model Customer {
+  id            String   @id @default(uuid())
+  inventoryId   String   @map("inventory_id")
+  name          String   @db.VarChar(255)
+  address       String?  @db.Text
+  contactNumber String?  @map("contact_number") @db.VarChar(50)
+  gstNumber     String?  @map("gst_number") @db.VarChar(50)
+  remark        String?  @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  invoices  SalesInvoice[]
+
+  @@index([inventoryId])
+  @@map("customers")
+}
+
+model SalesInvoiceBasics {
+  id                 String   @id @default(uuid())
+  inventoryId        String   @unique @map("inventory_id")
+  companyName        String   @map("company_name") @db.VarChar(255)
+  address            String?  @db.Text
+  phone              String?  @db.VarChar(50)
+  email              String?  @db.VarChar(255)
+  gstNumber          String?  @map("gst_number") @db.VarChar(50)
+  stateLabel         String?  @map("state_label") @db.VarChar(100)
+  logoData           String?  @map("logo_data") @db.Text
+  qrCodeData         String?  @map("qr_code_data") @db.Text
+  bankName           String?  @map("bank_name") @db.Text
+  accountNumber      String?  @map("account_number") @db.VarChar(50)
+  ifscCode           String?  @map("ifsc_code") @db.VarChar(20)
+  accountHolderName  String?  @map("account_holder_name") @db.VarChar(255)
+  termsAndConditions String?  @map("terms_and_conditions") @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  @@map("sales_invoice_basics")
+}
+
+model SalesInvoice {
+  id              String   @id @default(uuid())
+  inventoryId     String   @map("inventory_id")
+  customerId      String   @map("customer_id")
+  invoiceNumber   Int      @map("invoice_number")
+  invoiceDate     DateTime @map("invoice_date") @db.Date
+  customerName    String   @map("customer_name") @db.VarChar(255)
+  customerAddress String?  @map("customer_address") @db.Text
+  customerGst     String?  @map("customer_gst") @db.VarChar(50)
+  customerContact String?  @map("customer_contact") @db.VarChar(50)
+  customerRemark  String?  @map("customer_remark") @db.Text
+  receivedAmount  Decimal  @default(0) @map("received_amount") @db.Decimal(14, 2)
+  subTotal        Decimal  @map("sub_total") @db.Decimal(14, 2)
+  totalAmount     Decimal  @map("total_amount") @db.Decimal(14, 2)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  inventory Inventory          @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  customer  Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  lines     SalesInvoiceLine[]
+
+  @@unique([inventoryId, invoiceNumber])
+  @@index([inventoryId])
+  @@index([customerId])
+  @@index([invoiceDate])
+  @@map("sales_invoices")
+}
+
+model SalesInvoiceLine {
+  id           String  @id @default(uuid())
+  invoiceId    String  @map("invoice_id")
+  skuId        String  @map("sku_id")
+  lineNo       Int     @map("line_no")
+  itemName     String  @map("item_name") @db.VarChar(500)
+  mrp          Decimal @db.Decimal(12, 2)
+  quantity     Int
+  unit         String  @db.VarChar(50)
+  pricePerUnit Decimal @map("price_per_unit") @db.Decimal(12, 2)
+  lineTotal    Decimal @map("line_total") @db.Decimal(14, 2)
+
+  invoice SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sku     SKU          @relation(fields: [skuId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, skuId])
+  @@index([invoiceId])
+  @@map("sales_invoice_lines")
 }
 
 model Category {
@@ -277,8 +372,9 @@ model SKU {
   poItems        POItem[]
   toItems        TOItem[]
   roItems        ROItem[]
-  billLines      BillLine[]
-  posMenuItems   POSMenuItem[]
+  billLines          BillLine[]
+  posMenuItems       POSMenuItem[]
+  salesInvoiceLines  SalesInvoiceLine[]
 
   @@index([code])
   @@index([categoryId])

@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { Home, LayoutDashboard, Shield, Key, Lock, Zap, ShieldCheck, Users, DollarSign, Settings, Package, Warehouse, FileText, BarChart3, Store } from 'lucide-react'
+import { Home, LayoutDashboard, Shield, Key, Lock, Zap, ShieldCheck, Users, DollarSign, Settings, Package, Warehouse, FileText, BarChart3, Store, ShoppingCart, Receipt, SlidersHorizontal } from 'lucide-react'
 
 export interface MenuItem {
   label: string
@@ -207,6 +207,28 @@ export const sidebarMenuItems: MenuItem[] = [
           featureCode: 'show_reports_in_sidebar',
           privilegeCode: 'view',
         },
+      },
+    ],
+  },
+  {
+    label: 'Sales',
+    href: '/sales',
+    icon: <ShoppingCart className="w-4 h-4" />,
+    children: [
+      {
+        label: 'Customers',
+        href: '/sales/customers',
+        icon: <Users className="w-4 h-4" />,
+      },
+      {
+        label: 'Basics',
+        href: '/sales/basics',
+        icon: <SlidersHorizontal className="w-4 h-4" />,
+      },
+      {
+        label: 'Invoice',
+        href: '/sales/invoices',
+        icon: <Receipt className="w-4 h-4" />,
       },
     ],
   },
