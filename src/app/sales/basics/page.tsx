@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useInventoryContext } from '@/contexts/InventoryContext'
 import { authFetch } from '@/lib/fetch'
-import { readImageAsDataUrl } from '@/lib/sales/readImageFile'
+import { getPublicUploadUrl } from '@/lib/uploads/publicUrl'
 import { Save, Trash2, ImageIcon } from 'lucide-react'
 
 interface BasicsForm {
@@ -13,8 +13,8 @@ interface BasicsForm {
   email: string
   gstNumber: string
   stateLabel: string
-  logoData: string | null
-  qrCodeData: string | null
+  logoPath: string | null
+  qrPath: string | null
   bankName: string
   accountNumber: string
   ifscCode: string
@@ -29,8 +29,8 @@ const emptyForm = (): BasicsForm => ({
   email: '',
   gstNumber: '',
   stateLabel: '',
-  logoData: null,
-  qrCodeData: null,
+  logoPath: null,
+  qrPath: null,
   bankName: '',
   accountNumber: '',
   ifscCode: '',
@@ -38,9 +38,31 @@ const emptyForm = (): BasicsForm => ({
   termsAndConditions: 'Thanks for doing business with us!',
 })
 
+function formatApiError(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message
+  return fallback
+}
+
+async function parseErrorResponse(res: Response): Promise<string> {
+  try {
+    const data = await res.json()
+    if (typeof data.error === 'string') return data.error
+    if (Array.isArray(data.error)) {
+      return data.error.map((e: { message?: string }) => e.message).filter(Boolean).join('; ')
+    }
+  } catch {
+    /* ignore */
+  }
+  return `Request failed (${res.status})`
+}
+
 export default function SalesBasicsPage() {
   const { selectedInventory } = useInventoryContext()
   const [form, setForm] = useState<BasicsForm>(emptyForm())
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [qrPreview, setQrPreview] = useState<string | null>(null)
+  const [pendingLogo, setPendingLogo] = useState<File | null>(null)
+  const [pendingQr, setPendingQr] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [hasRecord, setHasRecord] = useState(false)
@@ -55,6 +77,8 @@ export default function SalesBasicsPage() {
     try {
       setLoading(true)
       setError(null)
+      setPendingLogo(null)
+      setPendingQr(null)
       const token = localStorage.getItem('accessToken')
       const res = await fetch(`/api/sales/basics?inventoryId=${selectedInventory.id}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -63,6 +87,8 @@ export default function SalesBasicsPage() {
       const b = json.data
       if (b) {
         setHasRecord(true)
+        const logoPath = b.logoData || null
+        const qrPath = b.qrCodeData || null
         setForm({
           companyName: b.companyName || '',
           address: b.address || '',
@@ -70,17 +96,21 @@ export default function SalesBasicsPage() {
           email: b.email || '',
           gstNumber: b.gstNumber || '',
           stateLabel: b.stateLabel || '',
-          logoData: b.logoData || null,
-          qrCodeData: b.qrCodeData || null,
+          logoPath,
+          qrPath,
           bankName: b.bankName || '',
           accountNumber: b.accountNumber || '',
           ifscCode: b.ifscCode || '',
           accountHolderName: b.accountHolderName || '',
           termsAndConditions: b.termsAndConditions || '',
         })
+        setLogoPreview(b.logoUrl || getPublicUploadUrl(logoPath) || null)
+        setQrPreview(b.qrCodeUrl || getPublicUploadUrl(qrPath) || null)
       } else {
         setHasRecord(false)
         setForm(emptyForm())
+        setLogoPreview(null)
+        setQrPreview(null)
       }
     } catch {
       setError('Failed to load basics')
@@ -96,14 +126,41 @@ export default function SalesBasicsPage() {
 
   const patch = (partial: Partial<BasicsForm>) => setForm((f) => ({ ...f, ...partial }))
 
-  const onImage = async (field: 'logoData' | 'qrCodeData', file: File | null) => {
+  const onPickImage = (type: 'logo' | 'qr', file: File | null) => {
     if (!file) return
-    try {
-      const dataUrl = await readImageAsDataUrl(file)
-      patch({ [field]: dataUrl })
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Invalid image')
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file')
+      return
     }
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Image must be 2 MB or smaller')
+      return
+    }
+    setError(null)
+    const preview = URL.createObjectURL(file)
+    if (type === 'logo') {
+      setPendingLogo(file)
+      setLogoPreview(preview)
+    } else {
+      setPendingQr(file)
+      setQrPreview(preview)
+    }
+  }
+
+  const uploadAsset = async (type: 'logo' | 'qr', file: File): Promise<string> => {
+    const fd = new FormData()
+    fd.append('inventoryId', selectedInventory!.id)
+    fd.append('type', type)
+    fd.append('file', file)
+    const res = await authFetch('/api/sales/basics/upload', {
+      method: 'POST',
+      body: fd,
+    })
+    if (!res.ok) {
+      throw new Error(await parseErrorResponse(res))
+    }
+    const json = await res.json()
+    return json.data.path as string
   }
 
   const handleSave = async () => {
@@ -116,20 +173,46 @@ export default function SalesBasicsPage() {
     setError(null)
     setSuccess(null)
     try {
+      let logoPath = form.logoPath
+      let qrPath = form.qrPath
+
+      if (pendingLogo) {
+        logoPath = await uploadAsset('logo', pendingLogo)
+      }
+      if (pendingQr) {
+        qrPath = await uploadAsset('qr', pendingQr)
+      }
+
       const res = await authFetch('/api/sales/basics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventoryId: selectedInventory.id, ...form }),
+        body: JSON.stringify({
+          inventoryId: selectedInventory.id,
+          companyName: form.companyName,
+          address: form.address,
+          phone: form.phone,
+          email: form.email,
+          gstNumber: form.gstNumber,
+          stateLabel: form.stateLabel,
+          logoData: logoPath,
+          qrCodeData: qrPath,
+          bankName: form.bankName,
+          accountNumber: form.accountNumber,
+          ifscCode: form.ifscCode,
+          accountHolderName: form.accountHolderName,
+          termsAndConditions: form.termsAndConditions,
+        }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to save')
+        throw new Error(await parseErrorResponse(res))
       }
+      setPendingLogo(null)
+      setPendingQr(null)
       setHasRecord(true)
       setSuccess('Invoice basics saved successfully')
-      load()
+      await load()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to save')
+      setError(formatApiError(e, 'Failed to save'))
     } finally {
       setSaving(false)
     }
@@ -139,15 +222,20 @@ export default function SalesBasicsPage() {
     if (!selectedInventory || !confirm('Delete invoice basics for this inventory?')) return
     try {
       const token = localStorage.getItem('accessToken')
-      await fetch(`/api/sales/basics?inventoryId=${selectedInventory.id}`, {
+      const res = await fetch(`/api/sales/basics?inventoryId=${selectedInventory.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!res.ok) throw new Error(await parseErrorResponse(res))
       setForm(emptyForm())
+      setLogoPreview(null)
+      setQrPreview(null)
+      setPendingLogo(null)
+      setPendingQr(null)
       setHasRecord(false)
       setSuccess('Basics removed')
-    } catch {
-      setError('Failed to delete')
+    } catch (e: unknown) {
+      setError(formatApiError(e, 'Failed to delete'))
     }
   }
 
@@ -239,20 +327,37 @@ export default function SalesBasicsPage() {
 
         <section className="p-4 space-y-3">
           <h3 className="text-xs font-semibold text-gray-800 uppercase tracking-wide">Logo & QR Code</h3>
+          <p className="text-[10px] text-gray-500">
+            Files are stored on the server (one logo and one QR per inventory — re-upload replaces the previous file).
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-gray-600 flex items-center gap-1">
                 <ImageIcon className="w-3.5 h-3.5" /> Logo
               </label>
-              <input type="file" accept="image/*" className="mt-1 text-xs w-full" onChange={(e) => onImage('logoData', e.target.files?.[0] || null)} />
-              {form.logoData && <img src={form.logoData} alt="Logo preview" className="mt-2 h-20 object-contain border rounded" />}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="mt-1 text-xs w-full"
+                onChange={(e) => onPickImage('logo', e.target.files?.[0] || null)}
+              />
+              {logoPreview && (
+                <img src={logoPreview} alt="Logo preview" className="mt-2 h-20 object-contain border rounded" />
+              )}
             </div>
             <div>
               <label className="text-xs text-gray-600 flex items-center gap-1">
                 <ImageIcon className="w-3.5 h-3.5" /> QR Code
               </label>
-              <input type="file" accept="image/*" className="mt-1 text-xs w-full" onChange={(e) => onImage('qrCodeData', e.target.files?.[0] || null)} />
-              {form.qrCodeData && <img src={form.qrCodeData} alt="QR preview" className="mt-2 h-20 object-contain border rounded" />}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="mt-1 text-xs w-full"
+                onChange={(e) => onPickImage('qr', e.target.files?.[0] || null)}
+              />
+              {qrPreview && (
+                <img src={qrPreview} alt="QR preview" className="mt-2 h-20 object-contain border rounded" />
+              )}
             </div>
           </div>
         </section>

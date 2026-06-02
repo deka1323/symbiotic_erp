@@ -15,6 +15,9 @@
 # production
 /build
 
+# uploaded assets (local dev; VPS uses UPLOAD_DIR)
+/uploads
+
 # misc
 .DS_Store
 *.pem

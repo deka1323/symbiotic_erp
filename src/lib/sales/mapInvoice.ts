@@ -1,4 +1,5 @@
 import { parseDecimal } from './formatCurrency'
+import { getPublicUploadUrl, isStoredAssetPath } from '@/lib/uploads/publicUrl'
 import type { InvoiceBasicsDto, InvoiceLineDto, SalesInvoiceDto } from './invoiceTypes'
 
 export function mapInvoiceLine(line: Record<string, unknown>): InvoiceLineDto {
@@ -17,6 +18,12 @@ export function mapInvoiceLine(line: Record<string, unknown>): InvoiceLineDto {
 
 export function mapBasics(b: Record<string, unknown> | null | undefined): InvoiceBasicsDto | null {
   if (!b) return null
+  const logoPath = (b.logoData as string) ?? null
+  const qrPath = (b.qrCodeData as string) ?? null
+  const logoUrl =
+    (b.logoUrl as string) || (isStoredAssetPath(logoPath) ? getPublicUploadUrl(logoPath) : '')
+  const qrCodeUrl =
+    (b.qrCodeUrl as string) || (isStoredAssetPath(qrPath) ? getPublicUploadUrl(qrPath) : '')
   return {
     id: String(b.id),
     inventoryId: String(b.inventoryId),
@@ -26,8 +33,8 @@ export function mapBasics(b: Record<string, unknown> | null | undefined): Invoic
     email: (b.email as string) ?? null,
     gstNumber: (b.gstNumber as string) ?? null,
     stateLabel: (b.stateLabel as string) ?? null,
-    logoData: (b.logoData as string) ?? null,
-    qrCodeData: (b.qrCodeData as string) ?? null,
+    logoData: logoUrl || logoPath,
+    qrCodeData: qrCodeUrl || qrPath,
     bankName: (b.bankName as string) ?? null,
     accountNumber: (b.accountNumber as string) ?? null,
     ifscCode: (b.ifscCode as string) ?? null,

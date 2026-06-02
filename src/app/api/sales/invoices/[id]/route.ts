@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authMiddleware } from '@/lib/middleware/auth'
 import { prisma } from '@/lib/prisma'
+import { getPublicUploadUrl } from '@/lib/uploads/salesAssets'
 
 export async function GET(
   req: NextRequest,
@@ -27,9 +28,17 @@ export async function GET(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
     }
 
-    const basics = await prisma.salesInvoiceBasics.findUnique({
+    const basicsRow = await prisma.salesInvoiceBasics.findUnique({
       where: { inventoryId: invoice.inventoryId },
     })
+
+    const basics = basicsRow
+      ? {
+          ...basicsRow,
+          logoUrl: getPublicUploadUrl(basicsRow.logoData),
+          qrCodeUrl: getPublicUploadUrl(basicsRow.qrCodeData),
+        }
+      : null
 
     return NextResponse.json({ data: { ...invoice, basics } })
   } catch (error) {
