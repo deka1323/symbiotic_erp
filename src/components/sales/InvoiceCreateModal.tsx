@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { authFetch } from '@/lib/fetch'
 import { formatInr, parseDecimal } from '@/lib/sales/formatCurrency'
-import { Plus, Trash2, X } from 'lucide-react'
+import { Plus, Search, Trash2, X } from 'lucide-react'
 
 interface CustomerOption {
   id: string
@@ -46,10 +46,14 @@ export function InvoiceCreateModal({
   const [invoiceNumber, setInvoiceNumber] = useState<number | ''>('')
   const [receivedAmount, setReceivedAmount] = useState('0')
   const [lines, setLines] = useState<LineDraft[]>([])
-  const [addSkuId, setAddSkuId] = useState('')
-  const [addQty, setAddQty] = useState('1')
+  const [itemSearch, setItemSearch] = useState('')
+  const [itemDropdownOpen, setItemDropdownOpen] = useState(false)
+  const [selectedAddSku, setSelectedAddSku] = useState<SkuOption | null>(null)
+  const [addQty, setAddQty] = useState(1)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const itemSearchRef = useRef<HTMLInputElement>(null)
+  const itemDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -84,16 +88,35 @@ export function InvoiceCreateModal({
     [lines]
   )
 
-  const skuOptions = skus.map((s) => ({
-    value: s.id,
-    label: `${s.code} — ${s.name} (${formatInr(parseDecimal(s.price))}/${s.unit})`,
-  }))
-
   const customerOptions = customers.map((c) => ({ value: c.id, label: c.name }))
 
+  const filteredSkuOptions = useMemo(() => {
+    const q = itemSearch.trim().toLowerCase()
+    const sorted = [...skus].sort((a, b) => a.name.localeCompare(b.name))
+    if (!q) return sorted
+    return sorted.filter((sku) => {
+      return (
+        sku.name.toLowerCase().includes(q) ||
+        sku.code.toLowerCase().includes(q) ||
+        (sku.description || '').toLowerCase().includes(q)
+      )
+    })
+  }, [skus, itemSearch])
+
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!itemDropdownRef.current?.contains(target)) {
+        setItemDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
   const addLine = () => {
-    const sku = skus.find((s) => s.id === addSkuId)
-    const qty = parseInt(addQty, 10)
+    const sku = selectedAddSku
+    const qty = Number.isFinite(addQty) ? Math.floor(addQty) : 0
     if (!sku || !qty || qty < 1) {
       setError('Select a product and valid quantity')
       return
@@ -108,8 +131,11 @@ export function InvoiceCreateModal({
       }
       return [...prev, { skuId: sku.id, sku, quantity: qty }]
     })
-    setAddSkuId('')
-    setAddQty('1')
+    setItemSearch('')
+    setSelectedAddSku(null)
+    setAddQty(1)
+    setItemDropdownOpen(false)
+    itemSearchRef.current?.focus()
   }
 
   const removeLine = (skuId: string) => {
@@ -223,29 +249,83 @@ export function InvoiceCreateModal({
 
           <div className="rounded-lg border border-gray-200 p-3 space-y-2">
             <div className="text-xs font-semibold text-gray-800">Add items</div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="flex-1 min-w-0">
-                <SearchableSelect
-                  options={skuOptions}
-                  value={addSkuId}
-                  onChange={setAddSkuId}
-                  placeholder="Search SKU..."
-                  combobox
-                  menuPortal
+            <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_110px_140px_90px] gap-2 items-start">
+              <div className="relative min-w-0" ref={itemDropdownRef}>
+                <label className="text-[11px] text-gray-600">Item</label>
+                <div className="relative mt-1">
+                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    ref={itemSearchRef}
+                    value={itemSearch}
+                    onChange={(e) => {
+                      setItemSearch(e.target.value)
+                      setItemDropdownOpen(true)
+                      setSelectedAddSku(null)
+                    }}
+                    onFocus={() => setItemDropdownOpen(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && filteredSkuOptions.length > 0) {
+                        e.preventDefault()
+                        const first = filteredSkuOptions[0]
+                        setSelectedAddSku(first)
+                        setItemSearch(first.name)
+                        setItemDropdownOpen(false)
+                      }
+                    }}
+                    placeholder="Search item name..."
+                    className="input w-full pl-8"
+                  />
+                </div>
+                {itemDropdownOpen && (
+                  <div className="absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                    {filteredSkuOptions.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-gray-500">No matching items</div>
+                    ) : (
+                      filteredSkuOptions.map((sku) => (
+                        <button
+                          key={sku.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedAddSku(sku)
+                            setItemSearch(sku.name)
+                            setItemDropdownOpen(false)
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-b-0 border-gray-100"
+                        >
+                          <div className="text-xs font-medium text-gray-900">{sku.name}</div>
+                          <div className="text-[11px] text-gray-500">
+                            {sku.code} · {formatInr(parseDecimal(sku.price))}/{sku.unit}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-600">Quantity</label>
+                <input
+                  type="number"
+                  min={1}
+                  className="input mt-1 w-full"
+                  value={addQty}
+                  onChange={(e) => setAddQty(Math.max(1, Number(e.target.value) || 1))}
+                  placeholder="Qty"
                 />
               </div>
-              <input
-                type="number"
-                min={1}
-                className="input w-24"
-                value={addQty}
-                onChange={(e) => setAddQty(e.target.value)}
-                placeholder="Qty"
-              />
+              <div>
+                <label className="text-[11px] text-gray-600">Price</label>
+                <div className="mt-1 h-9 px-3 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-800 flex items-center">
+                  {selectedAddSku
+                    ? `${formatInr(parseDecimal(selectedAddSku.price))} / ${selectedAddSku.unit}`
+                    : 'Select item'}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={addLine}
-                className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg flex items-center gap-1 justify-center"
+                disabled={!selectedAddSku || addQty < 1}
+                className="mt-[20px] px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg flex items-center gap-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-3.5 h-3.5" /> Add
               </button>
