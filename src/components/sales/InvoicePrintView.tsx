@@ -34,51 +34,59 @@ function InvoiceFixedHeader({
   pageNumber: number
   totalPages: number
 }) {
-  const proprietor = invoice.customerRemark?.trim() || '—'
+  const companyDisplay = basics.companyName.trim().toUpperCase()
 
   return (
     <header className="inv-fixed-header">
       <table className="inv-header-table">
         <tbody>
           <tr className="inv-ht-title-row">
-            <td colSpan={4}>Tax Invoice</td>
+            <td colSpan={2}>Tax Invoice</td>
           </tr>
           <tr>
-            <td className="inv-ht-logo-cell">
-              {basics.logoData ? (
-                <img src={basics.logoData} alt="" className="inv-ht-logo" />
-              ) : (
-                <span className="inv-ht-logo-empty" />
-              )}
+            <td className="inv-ht-brand-cell">
+              <div className="inv-brand-row">
+                <div className="inv-ht-logo-wrap">
+                  {basics.logoData ? (
+                    <img src={basics.logoData} alt="" className="inv-ht-logo" />
+                  ) : (
+                    <span className="inv-ht-logo-empty" />
+                  )}
+                </div>
+                <div className="inv-ht-company-block">
+                  <div className="inv-ht-co-name">{companyDisplay}</div>
+                  <div className="inv-ht-co-detail">
+                    {basics.address && <div>{basics.address}</div>}
+                    {basics.phone && <div>Phone: {basics.phone}</div>}
+                    {basics.email && <div>Email: {basics.email}</div>}
+                    {basics.gstNumber && <div>GSTIN: {basics.gstNumber}</div>}
+                    {basics.stateLabel && <div>State: {basics.stateLabel}</div>}
+                  </div>
+                </div>
+              </div>
             </td>
-            <td className="inv-ht-company-cell">
-              <div className="inv-ht-co-name">{basics.companyName}</div>
-              {basics.address && <div>{basics.address}</div>}
-              {basics.phone && <div>Phone no.: {basics.phone}</div>}
-              {basics.email && <div>Email: {basics.email}</div>}
-              {basics.gstNumber && <div>GSTIN: {basics.gstNumber}</div>}
-              {basics.stateLabel && <div>State: {basics.stateLabel}</div>}
-            </td>
-            <td className="inv-ht-meta-cell">
-              <span className="inv-ht-meta-lbl">Invoice No.</span>
-              <span className="inv-ht-meta-val">{invoiceNumber}</span>
-            </td>
-            <td className="inv-ht-meta-cell">
-              <span className="inv-ht-meta-lbl">Date</span>
-              <span className="inv-ht-meta-val">{dateLabel}</span>
+            <td className="inv-ht-meta-compact">
+              <div className="inv-ht-meta-stack">
+                <div className="inv-ht-meta-item">
+                  <span className="inv-ht-meta-lbl">Invoice No.</span>
+                  <span className="inv-ht-meta-val">{invoiceNumber}</span>
+                </div>
+                <div className="inv-ht-meta-item">
+                  <span className="inv-ht-meta-lbl">Date</span>
+                  <span className="inv-ht-meta-val">{dateLabel}</span>
+                </div>
+              </div>
             </td>
           </tr>
           <tr>
             <td colSpan={2} className="inv-ht-bill-cell">
-              <div className="inv-ht-inline-lbl">Bill To :-</div>
-              <div>M/s {invoice.customerName}</div>
-              {invoice.customerAddress && <div>{invoice.customerAddress}</div>}
-              {invoice.customerGst && <div>GSTIN: {invoice.customerGst}</div>}
-              {invoice.customerContact && <div>{invoice.customerContact}</div>}
-            </td>
-            <td colSpan={2} className="inv-ht-prop-cell">
-              <div className="inv-ht-inline-lbl">Proprietor:-</div>
-              <div>{proprietor}</div>
+              <div className="inv-ht-inline-lbl">Bill To</div>
+              <div className="inv-ht-cust-name">M/s {invoice.customerName}</div>
+              <div className="inv-ht-bill-detail">
+                {invoice.customerAddress && <div>{invoice.customerAddress}</div>}
+                {invoice.customerGst && <div>GSTIN: {invoice.customerGst}</div>}
+                {invoice.customerContact && <div>{invoice.customerContact}</div>}
+              </div>
             </td>
           </tr>
         </tbody>
@@ -210,7 +218,7 @@ function AmountsSummary({ invoice }: { invoice: SalesInvoiceDto }) {
               <td>Sub Total</td>
               <td>{formatInr(invoice.subTotal)}</td>
             </tr>
-            <tr>
+            <tr className="amts-total">
               <td>Total</td>
               <td>{formatInr(invoice.totalAmount)}</td>
             </tr>
@@ -283,6 +291,8 @@ function ClosingFooterRow({
   basics: InvoiceBasicsDto
   terms: string
 }) {
+  const companyDisplay = basics.companyName.trim().toUpperCase()
+
   return (
     <table className="inv-footer-table">
       <tbody>
@@ -310,9 +320,9 @@ function ClosingFooterRow({
             <div className="inv-ft-terms-txt">{terms}</div>
           </td>
           <td className="inv-ft-sign">
-            <div>For : {basics.companyName}</div>
+            <div className="inv-ft-for">For: {companyDisplay}</div>
             <div className="inv-ft-sign-gap" />
-            <div>Authorized Signatory</div>
+            <div className="inv-ft-signatory">Authorized Signatory</div>
           </td>
         </tr>
       </tbody>

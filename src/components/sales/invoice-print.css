@@ -1,10 +1,10 @@
-/* B2B tax invoice — slim bordered header grid + single-row footer */
+/* Professional tax invoice — print-first layout */
 
 .invoice-print-root {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Segoe UI', system-ui, -apple-system, Arial, Helvetica, sans-serif;
   font-size: 8.5pt;
-  color: #000;
-  line-height: 1.3;
+  color: #111;
+  line-height: 1.35;
   background: #fff;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
@@ -25,20 +25,19 @@
 }
 
 .invoice-sheet {
-  border: 1px solid #000;
-  margin: 6mm 8mm;
-  min-height: calc(297mm - 12mm);
+  border: 1px solid #1a1a1a;
+  margin: 5mm 7mm;
+  min-height: calc(297mm - 10mm);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   background: #fff;
 }
 
-/* ─── Slim fixed header: full-width bordered table ─── */
+/* ─── Header ─── */
 .inv-fixed-header {
   flex-shrink: 0;
-  padding: 0 4mm;
-  margin-bottom: 2mm;
+  padding: 3mm 3.5mm 0;
 }
 
 .inv-header-table {
@@ -46,103 +45,164 @@
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 7.5pt;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
 .inv-header-table td {
-  border: 1px solid #000;
-  padding: 1mm 1.5mm;
+  border: 1px solid #1a1a1a;
+  padding: 1.5mm 2mm;
   vertical-align: top;
 }
 
 .inv-ht-title-row td {
   text-align: center;
-  font-weight: 700;
-  font-size: 10pt;
-  padding: 1.2mm 2mm;
-  letter-spacing: 0.04em;
+  font-weight: 800;
+  font-size: 11pt;
+  padding: 2mm 2mm 1.8mm;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom-width: 1.5px;
 }
 
-.inv-ht-logo-cell {
-  width: 14%;
-  text-align: center;
-  vertical-align: middle;
-  padding: 1mm;
+/* Logo + company: single cell, no internal divider */
+.inv-ht-brand-cell {
+  padding: 2mm 2.5mm;
+  width: 78%;
+}
+
+.inv-brand-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 3mm;
+}
+
+.inv-ht-logo-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14mm;
+  min-height: 14mm;
 }
 
 .inv-ht-logo {
-  width: 11mm;
-  height: 11mm;
+  width: 13mm;
+  height: 13mm;
   object-fit: contain;
   display: block;
-  margin: 0 auto;
 }
 
 .inv-ht-logo-empty {
   display: block;
-  width: 11mm;
-  height: 11mm;
-  margin: 0 auto;
+  width: 13mm;
+  height: 13mm;
 }
 
-.inv-ht-company-cell {
-  width: 46%;
-  font-size: 7.5pt;
+.inv-ht-company-block {
+  flex: 1;
+  min-width: 0;
 }
 
 .inv-ht-co-name {
-  font-weight: 700;
-  font-size: 8pt;
-  margin-bottom: 0.3mm;
+  font-weight: 800;
+  font-size: 11pt;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-bottom: 1mm;
+  color: #000;
 }
 
-.inv-ht-meta-cell {
-  width: 20%;
-  vertical-align: middle;
+.inv-ht-co-detail {
+  font-size: 7.2pt;
+  line-height: 1.35;
+  color: #222;
+}
+
+.inv-ht-co-detail div + div {
+  margin-top: 0.2mm;
+}
+
+/* Compact invoice meta — narrow column */
+.inv-ht-meta-compact {
+  width: 22%;
+  padding: 1.5mm 2mm !important;
+  vertical-align: middle !important;
+  border-left: 1px solid #1a1a1a;
+}
+
+.inv-ht-meta-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8mm;
+}
+
+.inv-ht-meta-item {
+  text-align: right;
 }
 
 .inv-ht-meta-lbl {
   display: block;
   font-weight: 700;
-  font-size: 7pt;
+  font-size: 6.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #333;
+  line-height: 1.2;
 }
 
 .inv-ht-meta-val {
   display: block;
   font-weight: 600;
-  font-size: 8pt;
-  margin-top: 0.3mm;
+  font-size: 7.5pt;
+  margin-top: 0.2mm;
+  line-height: 1.2;
 }
 
-.inv-ht-bill-cell,
-.inv-ht-prop-cell {
+.inv-ht-bill-cell {
   font-size: 7.5pt;
-  min-height: 10mm;
+  padding: 2mm 2.5mm !important;
 }
 
 .inv-ht-inline-lbl {
-  font-weight: 700;
-  margin-bottom: 0.3mm;
+  font-weight: 800;
+  font-size: 7.5pt;
+  margin-bottom: 0.8mm;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.inv-ht-cust-name {
+  font-weight: 800;
+  font-size: 8.5pt;
+  margin-bottom: 0.4mm;
+}
+
+.inv-ht-bill-detail {
+  font-size: 7.2pt;
+  line-height: 1.35;
 }
 
 .inv-page-pill {
   text-align: right;
   font-size: 6.5pt;
-  color: #444;
-  padding: 0.5mm 0 0;
+  color: #555;
+  padding: 1mm 0 0;
+  font-weight: 600;
 }
 
 /* ─── Body ─── */
 .inv-body {
   flex: 1 1 auto;
-  padding: 0 4mm 4mm;
+  padding: 0 3.5mm 3.5mm;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  gap: 2mm;
 }
 
 .inv-table-wrap {
-  margin-bottom: 2mm;
+  margin-bottom: 0;
 }
 
 .inv-table {
@@ -154,18 +214,20 @@
 
 .inv-table th,
 .inv-table td {
-  border: 1px solid #000;
-  padding: 1.2mm 1mm;
+  border: 1px solid #1a1a1a;
+  padding: 1.3mm 1.2mm;
   vertical-align: middle;
 }
 
 .inv-table thead th {
-  font-weight: 700;
+  font-weight: 800;
   text-align: center;
-  font-size: 6.8pt;
-  line-height: 1.15;
-  background: #fff;
-  padding: 1.4mm 0.8mm;
+  font-size: 7pt;
+  line-height: 1.2;
+  background: #f7f7f7;
+  padding: 1.6mm 0.8mm;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .inv-table td.tc {
@@ -183,86 +245,118 @@
 }
 
 .inv-table .it-title {
-  font-weight: 500;
-  line-height: 1.2;
+  font-weight: 800;
+  line-height: 1.25;
+  font-size: 7.8pt;
 }
 
 .inv-table .it-sub {
   font-size: 6.5pt;
-  margin-top: 0.2mm;
+  font-weight: 500;
+  margin-top: 0.3mm;
+  color: #333;
 }
 
 .inv-table .stack .sub {
   font-size: 6.5pt;
+  font-weight: 600;
 }
 
 .inv-table tfoot td {
-  font-weight: 700;
+  font-weight: 800;
+  background: #fafafa;
+  font-size: 8pt;
 }
 
 .inv-table tfoot .total-lbl {
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Summary */
 .inv-summary-row {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  border: 1px solid #000;
-  margin-bottom: 2mm;
+  grid-template-columns: 1.55fr 0.85fr;
+  border: 1px solid #1a1a1a;
 }
 
 .inv-words {
-  border-right: 1px solid #000;
-  padding: 2mm 2.5mm;
-  min-height: 11mm;
+  border-right: 1px solid #1a1a1a;
+  padding: 2.5mm 3mm;
+  min-height: 12mm;
 }
 
 .inv-words .w-lbl {
-  font-weight: 700;
+  font-weight: 800;
   font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .inv-words .w-txt {
-  font-size: 8pt;
-  margin-top: 1mm;
+  font-size: 8.5pt;
+  font-weight: 800;
+  margin-top: 1.2mm;
+  line-height: 1.4;
   text-transform: capitalize;
 }
 
 .inv-amts table {
   width: 100%;
+  height: 100%;
   border-collapse: collapse;
   font-size: 8pt;
 }
 
 .inv-amts td {
-  padding: 1.2mm 2.5mm;
-  border-bottom: 1px solid #000;
+  padding: 1.4mm 2.5mm;
+  border-bottom: 1px solid #1a1a1a;
 }
 
 .inv-amts tr:last-child td {
   border-bottom: none;
 }
 
-.inv-amts td:last-child {
-  text-align: right;
+.inv-amts td:first-child {
   font-weight: 600;
 }
 
-.inv-amts .amts-h {
+.inv-amts td:last-child {
+  text-align: right;
   font-weight: 700;
-  border-bottom: 1px solid #000;
+}
+
+.inv-amts .amts-h {
+  font-weight: 800;
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #f7f7f7;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.inv-amts tr.amts-total td {
+  font-weight: 800;
+  font-size: 9pt;
+  background: #fafafa;
+}
+
+.inv-amts tr.amts-total td:last-child {
+  font-weight: 800;
 }
 
 .inv-balance {
   display: flex;
   justify-content: flex-end;
-  gap: 3mm;
-  padding: 1.5mm 2.5mm;
-  margin-bottom: 2mm;
-  border: 1px solid #000;
+  align-items: center;
+  gap: 4mm;
+  padding: 2mm 3mm;
+  border: 1px solid #1a1a1a;
   font-size: 9pt;
-  font-weight: 700;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 /* Tax */
@@ -270,13 +364,12 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 7.5pt;
-  margin-bottom: 2mm;
 }
 
 .inv-tax th,
 .inv-tax td {
-  border: 1px solid #000;
-  padding: 1.2mm 1.5mm;
+  border: 1px solid #1a1a1a;
+  padding: 1.3mm 1.5mm;
   text-align: center;
 }
 
@@ -285,36 +378,40 @@
 }
 
 .inv-tax thead th {
-  font-weight: 700;
+  font-weight: 800;
   font-size: 7pt;
+  background: #f7f7f7;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .inv-tax tfoot td {
-  font-weight: 700;
+  font-weight: 800;
+  background: #fafafa;
 }
 
-/* ─── Footer: single row, 3 bordered columns (B2B demo) ─── */
+/* Footer */
 .inv-footer-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   margin-top: auto;
   font-size: 7.5pt;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .inv-footer-table td {
-  border: 1px solid #000;
-  padding: 2mm 2.5mm;
+  border: 1px solid #1a1a1a;
+  padding: 2.5mm 3mm;
   vertical-align: top;
 }
 
 .inv-ft-bank {
-  width: 40%;
+  width: 38%;
 }
 
 .inv-ft-terms {
-  width: 32%;
+  width: 34%;
 }
 
 .inv-ft-sign {
@@ -324,15 +421,18 @@
 }
 
 .inv-ft-section-lbl {
-  font-weight: 700;
-  margin-bottom: 1mm;
+  font-weight: 800;
+  font-size: 7.5pt;
+  margin-bottom: 1.2mm;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .inv-ft-bank-inner {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 2mm;
+  gap: 2.5mm;
 }
 
 .inv-ft-bank-text {
@@ -347,18 +447,31 @@
 }
 
 .inv-ft-qr {
-  width: 16mm;
-  height: 16mm;
+  width: 15mm;
+  height: 15mm;
   object-fit: contain;
   flex-shrink: 0;
 }
 
 .inv-ft-terms-txt {
   margin-top: 0.5mm;
+  font-size: 7.2pt;
+}
+
+.inv-ft-for {
+  font-weight: 600;
+  font-size: 7.5pt;
 }
 
 .inv-ft-sign-gap {
-  height: 10mm;
+  height: 12mm;
+}
+
+.inv-ft-signatory {
+  font-weight: 800;
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 @media print {
@@ -384,8 +497,8 @@
   }
 
   .invoice-sheet {
-    margin: 6mm 8mm;
-    min-height: calc(297mm - 12mm);
+    margin: 5mm 7mm;
+    min-height: calc(297mm - 10mm);
   }
 
   .inv-fixed-header,
@@ -403,18 +516,27 @@
   .inv-table thead {
     display: table-header-group;
   }
+
+  .inv-table thead th {
+    background: #f7f7f7 !important;
+  }
+
+  .inv-amts .amts-h,
+  .inv-tax thead th {
+    background: #f7f7f7 !important;
+  }
 }
 
 @media screen {
   .invoice-print-shell {
-    background: #9ca3af;
-    padding: 12px 0 24px;
+    background: #6b7280;
+    padding: 16px 0 28px;
     min-height: 100vh;
   }
 
   .invoice-print-page {
     background: #fff;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-    margin-bottom: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+    margin-bottom: 20px;
   }
 }
