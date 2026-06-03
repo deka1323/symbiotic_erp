@@ -1,24 +1,74 @@
 import type { InvoiceLineDto } from './invoiceTypes'
 
-/** Portrait A4 — conservative row counts for stable print breaks */
-export const INVOICE_FIRST_PAGE_ITEMS = 14
-export const INVOICE_CONTINUATION_ITEMS = 20
+/** Item rows per page (body only, after fixed header) */
+export const ITEM_ROWS_MIDDLE_PAGE = 16
+/** Last page: fewer rows because closing blocks need space */
+export const ITEM_ROWS_LAST_PAGE_MAX = 9
+/** Single-page invoice max items (all sections on one page) */
+export const ITEM_ROWS_SINGLE_PAGE = 11
 
-export function chunkInvoiceLines(lines: InvoiceLineDto[]): InvoiceLineDto[][] {
-  if (lines.length === 0) return [[]]
+export interface InvoicePagePlan {
+  pageNumber: number
+  totalPages: number
+  lines: InvoiceLineDto[]
+  showItemsTotal: boolean
+  showAmountsBlock: boolean
+  showBalance: boolean
+  showTaxTable: boolean
+  showClosingFooter: boolean
+}
 
-  const chunks: InvoiceLineDto[][] = []
-  let index = 0
-
-  chunks.push(lines.slice(index, index + INVOICE_FIRST_PAGE_ITEMS))
-  index += INVOICE_FIRST_PAGE_ITEMS
-
-  while (index < lines.length) {
-    chunks.push(lines.slice(index, index + INVOICE_CONTINUATION_ITEMS))
-    index += INVOICE_CONTINUATION_ITEMS
+export function planInvoicePages(lines: InvoiceLineDto[]): InvoicePagePlan[] {
+  const emptyClosing: Omit<InvoicePagePlan, 'pageNumber' | 'totalPages' | 'lines'> = {
+    showItemsTotal: true,
+    showAmountsBlock: true,
+    showBalance: true,
+    showTaxTable: true,
+    showClosingFooter: true,
   }
 
-  return chunks
+  if (lines.length === 0) {
+    return [{ pageNumber: 1, totalPages: 1, lines: [], ...emptyClosing }]
+  }
+
+  if (lines.length <= ITEM_ROWS_SINGLE_PAGE) {
+    return [{ pageNumber: 1, totalPages: 1, lines, ...emptyClosing }]
+  }
+
+  const plans: Omit<InvoicePagePlan, 'pageNumber' | 'totalPages'>[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    const remaining = lines.length - index
+    const needsClosingPage = remaining <= ITEM_ROWS_LAST_PAGE_MAX
+
+    if (needsClosingPage) {
+      plans.push({
+        lines: lines.slice(index),
+        ...emptyClosing,
+      })
+      index = lines.length
+    } else {
+      const take = Math.min(ITEM_ROWS_MIDDLE_PAGE, remaining - ITEM_ROWS_LAST_PAGE_MAX)
+      const chunkSize = Math.max(1, take)
+      plans.push({
+        lines: lines.slice(index, index + chunkSize),
+        showItemsTotal: false,
+        showAmountsBlock: false,
+        showBalance: false,
+        showTaxTable: false,
+        showClosingFooter: false,
+      })
+      index += chunkSize
+    }
+  }
+
+  const totalPages = plans.length
+  return plans.map((p, i) => ({
+    ...p,
+    pageNumber: i + 1,
+    totalPages,
+  }))
 }
 
 export function splitItemName(itemName: string): { title: string; subtitle: string | null } {
