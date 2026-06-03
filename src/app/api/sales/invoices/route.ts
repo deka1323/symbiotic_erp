@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { authMiddleware } from '@/lib/middleware/auth'
 import { prisma } from '@/lib/prisma'
 import { parseDecimal } from '@/lib/sales/formatCurrency'
+import { calculateLineGst, roundMoney } from '@/lib/sales/gstCalculations'
 
 const lineSchema = z.object({
   skuId: z.string().uuid(),
@@ -14,7 +15,9 @@ const createInvoiceSchema = z.object({
   customerId: z.string().uuid(),
   invoiceNumber: z.number().int().min(1).optional(),
   invoiceDate: z.string().min(1),
-  receivedAmount: z.number().min(0).optional().default(0),
+  receivedAmount: z.number().min(0).optional(),
+  applyGst: z.boolean().optional().default(false),
+  gstPercent: z.number().min(0).max(100).optional().default(0),
   lines: z.array(lineSchema).min(1),
 })
 
@@ -111,6 +114,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const applyGst = validated.applyGst === true
+    const gstPercent = applyGst
+      ? validated.gstPercent ?? parseDecimal(basics.defaultGstPercent)
+      : 0
+
+    if (applyGst && gstPercent <= 0) {
+      return NextResponse.json(
+        { error: 'Set GST percentage in Basics or on the invoice when applying GST' },
+        { status: 400 }
+      )
+    }
+
     const skuIds = [...new Set(validated.lines.map((l) => l.skuId))]
     const skus = await prisma.sKU.findMany({
       where: { id: { in: skuIds }, isActive: true },
@@ -124,6 +139,14 @@ export async function POST(req: NextRequest) {
       qtyBySku.set(line.skuId, (qtyBySku.get(line.skuId) || 0) + line.quantity)
     }
 
+    const skuMap = new Map(skus.map((s) => [s.id, s]))
+    const orderedSkuIds: string[] = []
+    for (const line of validated.lines) {
+      if (!orderedSkuIds.includes(line.skuId)) orderedSkuIds.push(line.skuId)
+    }
+
+    let lineNo = 1
+    let subTotal = 0
     const lineRows: {
       skuId: string
       lineNo: number
@@ -133,36 +156,36 @@ export async function POST(req: NextRequest) {
       unit: string
       pricePerUnit: number
       lineTotal: number
+      gstPercent: number
+      gstAmount: number
     }[] = []
 
-    const skuMap = new Map(skus.map((s) => [s.id, s]))
-    const orderedSkuIds: string[] = []
-    for (const line of validated.lines) {
-      if (!orderedSkuIds.includes(line.skuId)) orderedSkuIds.push(line.skuId)
-    }
-
-    let lineNo = 1
-    let subTotal = 0
     for (const skuId of orderedSkuIds) {
       const sku = skuMap.get(skuId)!
       const quantity = qtyBySku.get(skuId)!
-      const mrp = parseDecimal(sku.price)
-      const lineTotal = Math.round(mrp * quantity * 100) / 100
-      subTotal += lineTotal
+      const price = parseDecimal(sku.price)
+      const calc = calculateLineGst(price, quantity, gstPercent, applyGst)
+      subTotal += calc.lineTotal
       lineRows.push({
         skuId: sku.id,
         lineNo: lineNo++,
         itemName: buildItemName(sku),
-        mrp,
-        quantity,
+        mrp: calc.displayMrp,
+        quantity: calc.quantity,
         unit: sku.unit,
-        pricePerUnit: mrp,
-        lineTotal,
+        pricePerUnit: calc.pricePerUnit,
+        lineTotal: calc.lineTotal,
+        gstPercent: calc.gstPercent,
+        gstAmount: calc.gstAmount,
       })
     }
 
-    subTotal = Math.round(subTotal * 100) / 100
+    subTotal = roundMoney(subTotal)
     const totalAmount = subTotal
+    const receivedAmount =
+      validated.receivedAmount !== undefined
+        ? roundMoney(validated.receivedAmount)
+        : totalAmount
 
     let invoiceNumber = validated.invoiceNumber
     if (!invoiceNumber) {
@@ -187,20 +210,13 @@ export async function POST(req: NextRequest) {
         customerGst: customer.gstNumber,
         customerContact: customer.contactNumber,
         customerRemark: customer.remark,
-        receivedAmount: validated.receivedAmount ?? 0,
+        receivedAmount,
         subTotal,
         totalAmount,
+        applyGst,
+        gstPercent,
         lines: {
-          create: lineRows.map((row) => ({
-            skuId: row.skuId,
-            lineNo: row.lineNo,
-            itemName: row.itemName,
-            mrp: row.mrp,
-            quantity: row.quantity,
-            unit: row.unit,
-            pricePerUnit: row.pricePerUnit,
-            lineTotal: row.lineTotal,
-          })),
+          create: lineRows,
         },
       },
       include: {

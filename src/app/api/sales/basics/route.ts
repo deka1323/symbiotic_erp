@@ -27,6 +27,7 @@ const upsertBasicsSchema = z.object({
   ifscCode: z.string().max(20).optional(),
   accountHolderName: z.string().max(255).optional(),
   termsAndConditions: z.string().optional(),
+  defaultGstPercent: z.coerce.number().min(0).max(100).optional().default(0),
 })
 
 function serializeBasics(row: Record<string, unknown>) {
@@ -100,6 +101,7 @@ export async function POST(req: NextRequest) {
       ifscCode: validated.ifscCode || null,
       accountHolderName: validated.accountHolderName || null,
       termsAndConditions: validated.termsAndConditions || null,
+      defaultGstPercent: validated.defaultGstPercent ?? 0,
     }
 
     const saved = await prisma.salesInvoiceBasics.upsert({

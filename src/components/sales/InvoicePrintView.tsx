@@ -4,6 +4,7 @@ import './invoice-print.css'
 import { formatInr } from '@/lib/sales/formatCurrency'
 import { amountInWords } from '@/lib/sales/numberToWords'
 import { formatInvoiceDate } from '@/lib/sales/mapInvoice'
+import { buildTaxSummary } from '@/lib/sales/gstCalculations'
 import { planInvoicePages, splitItemName } from '@/lib/sales/invoicePrintLayout'
 import type { InvoiceBasicsDto, InvoiceLineDto, SalesInvoiceDto } from '@/lib/sales/invoiceTypes'
 import type { InvoicePagePlan } from '@/lib/sales/invoicePrintLayout'
@@ -17,7 +18,7 @@ function MoneyStack({ amount, pct = 0 }: { amount: number; pct?: number }) {
   )
 }
 
-/** Fixed header — identical on every printed page */
+/** B2B-style bordered grid header — same on every page */
 function InvoiceFixedHeader({
   basics,
   invoice,
@@ -37,53 +38,51 @@ function InvoiceFixedHeader({
 
   return (
     <header className="inv-fixed-header">
-      <h1 className="inv-doc-title">Tax Invoice</h1>
-
-      {/* Row 1: Logo + company (left) | Invoice No + Date (right) */}
-      <div className="inv-hdr-row1">
-        <div className="inv-hdr-brand">
-          {basics.logoData ? (
-            <img src={basics.logoData} alt="" className="inv-hdr-logo" />
-          ) : (
-            <div className="inv-hdr-logo-placeholder" aria-hidden />
-          )}
-          <div className="inv-hdr-company">
-            <div className="co-name">{basics.companyName}</div>
-            {basics.address && <div>{basics.address}</div>}
-            {basics.phone && <div>Phone no.: {basics.phone}</div>}
-            {basics.email && <div>Email: {basics.email}</div>}
-            {basics.gstNumber && <div>GSTIN: {basics.gstNumber}</div>}
-            {basics.stateLabel && <div>State: {basics.stateLabel}</div>}
-          </div>
-        </div>
-
-        <div className="inv-hdr-meta">
-          <div className="inv-hdr-meta-box">
-            <span className="lbl">Invoice No.</span>
-            <span className="val">{invoiceNumber}</span>
-          </div>
-          <div className="inv-hdr-meta-box">
-            <span className="lbl">Date</span>
-            <span className="val">{dateLabel}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 2: Bill To (left) | Proprietor (right) */}
-      <div className="inv-hdr-row2">
-        <div className="inv-hdr-bill">
-          <div className="hdr-lbl">Bill To</div>
-          <div className="cust">M/s {invoice.customerName}</div>
-          {invoice.customerAddress && <div>{invoice.customerAddress}</div>}
-          {invoice.customerGst && <div>GSTIN: {invoice.customerGst}</div>}
-          {invoice.customerContact && <div>Contact: {invoice.customerContact}</div>}
-        </div>
-        <div className="inv-hdr-prop">
-          <div className="hdr-lbl">Proprietor:</div>
-          <div className="prop-val">{proprietor}</div>
-        </div>
-      </div>
-
+      <table className="inv-header-table">
+        <tbody>
+          <tr className="inv-ht-title-row">
+            <td colSpan={4}>Tax Invoice</td>
+          </tr>
+          <tr>
+            <td className="inv-ht-logo-cell">
+              {basics.logoData ? (
+                <img src={basics.logoData} alt="" className="inv-ht-logo" />
+              ) : (
+                <span className="inv-ht-logo-empty" />
+              )}
+            </td>
+            <td className="inv-ht-company-cell">
+              <div className="inv-ht-co-name">{basics.companyName}</div>
+              {basics.address && <div>{basics.address}</div>}
+              {basics.phone && <div>Phone no.: {basics.phone}</div>}
+              {basics.email && <div>Email: {basics.email}</div>}
+              {basics.gstNumber && <div>GSTIN: {basics.gstNumber}</div>}
+              {basics.stateLabel && <div>State: {basics.stateLabel}</div>}
+            </td>
+            <td className="inv-ht-meta-cell">
+              <span className="inv-ht-meta-lbl">Invoice No.</span>
+              <span className="inv-ht-meta-val">{invoiceNumber}</span>
+            </td>
+            <td className="inv-ht-meta-cell">
+              <span className="inv-ht-meta-lbl">Date</span>
+              <span className="inv-ht-meta-val">{dateLabel}</span>
+            </td>
+          </tr>
+          <tr>
+            <td colSpan={2} className="inv-ht-bill-cell">
+              <div className="inv-ht-inline-lbl">Bill To :-</div>
+              <div>M/s {invoice.customerName}</div>
+              {invoice.customerAddress && <div>{invoice.customerAddress}</div>}
+              {invoice.customerGst && <div>GSTIN: {invoice.customerGst}</div>}
+              {invoice.customerContact && <div>{invoice.customerContact}</div>}
+            </td>
+            <td colSpan={2} className="inv-ht-prop-cell">
+              <div className="inv-ht-inline-lbl">Proprietor:-</div>
+              <div>{proprietor}</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
       {totalPages > 1 && (
         <div className="inv-page-pill">
           Page {pageNumber} of {totalPages}
@@ -98,12 +97,15 @@ function ItemsTableSection({
   showTotal,
   totalQty,
   totalAmount,
+  applyGst,
 }: {
   lines: InvoiceLineDto[]
   showTotal: boolean
   totalQty: number
   totalAmount: number
+  applyGst: boolean
 }) {
+  const totalGst = lines.reduce((s, l) => s + l.gstAmount, 0)
   return (
     <div className="inv-table-wrap">
       <table className="inv-table">
@@ -163,7 +165,7 @@ function ItemsTableSection({
                   <MoneyStack amount={0} pct={0} />
                 </td>
                 <td className="tr">
-                  <MoneyStack amount={0} pct={0} />
+                  <MoneyStack amount={line.gstAmount} pct={applyGst ? line.gstPercent : 0} />
                 </td>
                 <td className="tr">{formatInr(line.lineTotal)}</td>
               </tr>
@@ -179,7 +181,7 @@ function ItemsTableSection({
               <td className="tc">{totalQty}</td>
               <td colSpan={2}>&nbsp;</td>
               <td className="tr">{formatInr(0)}</td>
-              <td className="tr">{formatInr(0)}</td>
+              <td className="tr">{formatInr(totalGst)}</td>
               <td className="tr">{formatInr(totalAmount)}</td>
             </tr>
           </tfoot>
@@ -193,7 +195,7 @@ function AmountsSummary({ invoice }: { invoice: SalesInvoiceDto }) {
   return (
     <div className="inv-summary-row">
       <div className="inv-words">
-        <div className="w-lbl">Invoice Amount In Words</div>
+        <div className="w-lbl">Invoice Amount In Words:</div>
         <div className="w-txt">{amountInWords(invoice.totalAmount)}</div>
       </div>
       <div className="inv-amts">
@@ -223,7 +225,13 @@ function AmountsSummary({ invoice }: { invoice: SalesInvoiceDto }) {
   )
 }
 
-function TaxTable({ totalAmount }: { totalAmount: number }) {
+function TaxTable({ invoice }: { invoice: SalesInvoiceDto }) {
+  const taxRows = invoice.lines.map((l) => ({
+    taxableAmount: l.mrp * l.quantity,
+    gstAmount: l.gstAmount,
+  }))
+  const tax = buildTaxSummary(taxRows, invoice.gstPercent, invoice.applyGst)
+
   return (
     <table className="inv-tax">
       <thead>
@@ -244,30 +252,31 @@ function TaxTable({ totalAmount }: { totalAmount: number }) {
       <tbody>
         <tr>
           <td>&nbsp;</td>
-          <td className="tr">{formatInr(totalAmount)}</td>
-          <td>0%</td>
-          <td className="tr">{formatInr(0)}</td>
-          <td>0%</td>
-          <td className="tr">{formatInr(0)}</td>
-          <td className="tr">{formatInr(0)}</td>
+          <td className="tr">{formatInr(tax.taxableAmount)}</td>
+          <td>{tax.cgstRate ? `${tax.cgstRate}%` : '0%'}</td>
+          <td className="tr">{formatInr(tax.cgstAmount)}</td>
+          <td>{tax.sgstRate ? `${tax.sgstRate}%` : '0%'}</td>
+          <td className="tr">{formatInr(tax.sgstAmount)}</td>
+          <td className="tr">{formatInr(tax.totalTax)}</td>
         </tr>
       </tbody>
       <tfoot>
         <tr>
           <td>Total</td>
-          <td className="tr">{formatInr(totalAmount)}</td>
+          <td className="tr">{formatInr(tax.taxableAmount)}</td>
           <td>&nbsp;</td>
-          <td className="tr">{formatInr(0)}</td>
+          <td className="tr">{formatInr(tax.cgstAmount)}</td>
           <td>&nbsp;</td>
-          <td className="tr">{formatInr(0)}</td>
-          <td className="tr">{formatInr(0)}</td>
+          <td className="tr">{formatInr(tax.sgstAmount)}</td>
+          <td className="tr">{formatInr(tax.totalTax)}</td>
         </tr>
       </tfoot>
     </table>
   )
 }
 
-function ClosingFooter({
+/** B2B demo: one row, three bordered cells — Bank | Terms | Signatory (+ QR in bank cell) */
+function ClosingFooterRow({
   basics,
   terms,
 }: {
@@ -275,33 +284,39 @@ function ClosingFooter({
   terms: string
 }) {
   return (
-    <footer className="inv-closing">
-      <div className="inv-closing-bank">
-        <div className="inv-bank-lines">
-          <div className="b-title">Bank Details</div>
-          {basics.bankName && <div>Name : {basics.bankName}</div>}
-          {basics.accountNumber && <div>Account No. : {basics.accountNumber}</div>}
-          {basics.ifscCode && <div>IFSC code : {basics.ifscCode}</div>}
-          {basics.accountHolderName && (
-            <div>Account holder&apos;s name : {basics.accountHolderName}</div>
-          )}
-        </div>
-        {basics.qrCodeData && (
-          <img src={basics.qrCodeData} alt="Payment QR" className="inv-footer-qr" />
-        )}
-      </div>
-
-      <div className="inv-terms">
-        <div className="t-title">Terms and conditions</div>
-        <div>{terms}</div>
-      </div>
-
-      <div className="inv-sign">
-        <div className="co">For : {basics.companyName}</div>
-        <div className="sig-gap" />
-        <div>Authorized Signatory</div>
-      </div>
-    </footer>
+    <table className="inv-footer-table">
+      <tbody>
+        <tr>
+          <td className="inv-ft-bank">
+            <div className="inv-ft-bank-inner">
+              <div className="inv-ft-bank-text">
+                <div className="inv-ft-section-lbl">Bank Details</div>
+                {basics.bankName && <div>Name : {basics.bankName}</div>}
+                <div className="inv-ft-bank-line">
+                  {basics.accountNumber && <span>Account No. : {basics.accountNumber}</span>}
+                  {basics.ifscCode && <span>IFSC code : {basics.ifscCode}</span>}
+                </div>
+                {basics.accountHolderName && (
+                  <div>Account holder&apos;s name : {basics.accountHolderName}</div>
+                )}
+              </div>
+              {basics.qrCodeData && (
+                <img src={basics.qrCodeData} alt="" className="inv-ft-qr" />
+              )}
+            </div>
+          </td>
+          <td className="inv-ft-terms">
+            <div className="inv-ft-section-lbl">Terms and conditions:</div>
+            <div className="inv-ft-terms-txt">{terms}</div>
+          </td>
+          <td className="inv-ft-sign">
+            <div>For : {basics.companyName}</div>
+            <div className="inv-ft-sign-gap" />
+            <div>Authorized Signatory</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   )
 }
 
@@ -328,6 +343,7 @@ function InvoicePageBody({
           showTotal={plan.showItemsTotal}
           totalQty={totalQty}
           totalAmount={invoice.totalAmount}
+          applyGst={invoice.applyGst}
         />
       )}
 
@@ -340,9 +356,9 @@ function InvoicePageBody({
         </div>
       )}
 
-      {plan.showTaxTable && <TaxTable totalAmount={invoice.totalAmount} />}
+      {plan.showTaxTable && <TaxTable invoice={invoice} />}
 
-      {plan.showClosingFooter && <ClosingFooter basics={basics} terms={terms} />}
+      {plan.showClosingFooter && <ClosingFooterRow basics={basics} terms={terms} />}
     </div>
   )
 }
@@ -360,7 +376,7 @@ export function InvoicePrintView({ invoice }: { invoice: SalesInvoiceDto }) {
   const dateLabel = formatInvoiceDate(invoice.invoiceDate)
   const balance = invoice.totalAmount - invoice.receivedAmount
   const totalQty = invoice.lines.reduce((s, l) => s + l.quantity, 0)
-  const terms = basics.termsAndConditions || 'Thanks for doing business with us!'
+  const terms = basics.termsAndConditions || 'Thank You for doing business with us!'
   const pages = planInvoicePages(invoice.lines)
 
   return (

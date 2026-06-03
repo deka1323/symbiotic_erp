@@ -19,6 +19,7 @@ export interface InvoiceBasicsDto {
   ifscCode?: string | null
   accountHolderName?: string | null
   termsAndConditions?: string | null
+  defaultGstPercent?: number
 }
 
 export interface InvoiceLineDto {
@@ -31,6 +32,8 @@ export interface InvoiceLineDto {
   unit: string
   pricePerUnit: number
   lineTotal: number
+  gstPercent: number
+  gstAmount: number
 }
 
 export interface SalesInvoiceDto {
@@ -47,6 +50,8 @@ export interface SalesInvoiceDto {
   receivedAmount: number
   subTotal: number
   totalAmount: number
+  applyGst: boolean
+  gstPercent: number
   isActive: boolean
   lines: InvoiceLineDto[]
   basics?: InvoiceBasicsDto | null

@@ -13,6 +13,8 @@ export function mapInvoiceLine(line: Record<string, unknown>): InvoiceLineDto {
     unit: String(line.unit),
     pricePerUnit: parseDecimal(line.pricePerUnit),
     lineTotal: parseDecimal(line.lineTotal),
+    gstPercent: parseDecimal(line.gstPercent),
+    gstAmount: parseDecimal(line.gstAmount),
   }
 }
 
@@ -40,6 +42,7 @@ export function mapBasics(b: Record<string, unknown> | null | undefined): Invoic
     ifscCode: (b.ifscCode as string) ?? null,
     accountHolderName: (b.accountHolderName as string) ?? null,
     termsAndConditions: (b.termsAndConditions as string) ?? null,
+    defaultGstPercent: parseDecimal(b.defaultGstPercent),
   }
 }
 
@@ -68,6 +71,8 @@ export function mapInvoice(inv: Record<string, unknown>, basics?: Record<string,
     receivedAmount: parseDecimal(inv.receivedAmount),
     subTotal: parseDecimal(inv.subTotal),
     totalAmount: parseDecimal(inv.totalAmount),
+    applyGst: Boolean(inv.applyGst),
+    gstPercent: parseDecimal(inv.gstPercent),
     isActive: Boolean(inv.isActive),
     lines,
     basics: mapBasics(basics ?? (inv.basics as Record<string, unknown>)),

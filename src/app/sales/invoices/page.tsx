@@ -186,38 +186,55 @@ export default function InvoicesPage() {
       )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200/80 overflow-hidden">
-        <div className="p-3 border-b border-gray-200/80 bg-gray-50/50 space-y-2">
-          <input
-            type="text"
-            placeholder="Search by invoice # or customer name..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setPage(1)
-            }}
-            className="block w-full pl-3 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-          />
-          <div className="flex flex-wrap gap-2 items-center">
+        <div className="px-3 py-2 border-b border-gray-200/80 bg-gray-50/50">
+          <div className="flex flex-wrap items-center gap-2">
             <input
-              type="date"
-              value={dateFrom}
+              type="text"
+              placeholder="Search invoice # or customer…"
+              value={search}
               onChange={(e) => {
-                setDateFrom(e.target.value)
+                setSearch(e.target.value)
                 setPage(1)
               }}
-              className="input text-xs py-1"
+              className="flex-1 min-w-[140px] max-w-md pl-2.5 pr-2 py-1 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
             />
-            <span className="text-xs text-gray-400">to</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value)
-                setPage(1)
-              }}
-              className="input text-xs py-1"
-            />
-            <label className="flex items-center gap-1.5 text-xs text-gray-600 ml-auto">
+            <div className="flex items-center gap-1 shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5">
+              <span className="text-[10px] text-gray-500 font-medium">From</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value)
+                  setPage(1)
+                }}
+                className="border-0 p-0 text-[11px] w-[7.25rem] focus:ring-0 bg-transparent"
+              />
+              <span className="text-[10px] text-gray-300">|</span>
+              <span className="text-[10px] text-gray-500 font-medium">To</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value)
+                  setPage(1)
+                }}
+                className="border-0 p-0 text-[11px] w-[7.25rem] focus:ring-0 bg-transparent"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  type="button"
+                  className="text-[10px] text-blue-600 hover:underline ml-0.5"
+                  onClick={() => {
+                    setDateFrom('')
+                    setDateTo('')
+                    setPage(1)
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <label className="flex items-center gap-1 text-[11px] text-gray-600 shrink-0 ml-auto">
               <input
                 type="checkbox"
                 checked={showInactive}
@@ -225,12 +242,13 @@ export default function InvoicesPage() {
                   setShowInactive(e.target.checked)
                   setPage(1)
                 }}
+                className="rounded border-gray-300"
               />
-              Show inactive
+              Inactive
             </label>
           </div>
         </div>
-        <div className="p-3">
+        <div className="p-3 max-h-[min(65vh,560px)] overflow-auto">
           <DataTable
             columns={columns}
             data={items}

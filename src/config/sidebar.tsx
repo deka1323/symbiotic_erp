@@ -216,7 +216,12 @@ export const sidebarMenuItems: MenuItem[] = [
     icon: <ShoppingCart className="w-4 h-4" />,
     children: [
       {
-        label: 'Customers',
+        label: 'Invoice',
+        href: '/sales/invoices',
+        icon: <Receipt className="w-4 h-4" />,
+      },
+      {
+        label: 'Customer',
         href: '/sales/customers',
         icon: <Users className="w-4 h-4" />,
       },
@@ -224,11 +229,6 @@ export const sidebarMenuItems: MenuItem[] = [
         label: 'Basics',
         href: '/sales/basics',
         icon: <SlidersHorizontal className="w-4 h-4" />,
-      },
-      {
-        label: 'Invoice',
-        href: '/sales/invoices',
-        icon: <Receipt className="w-4 h-4" />,
       },
     ],
   },

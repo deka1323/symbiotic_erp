@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { authFetch } from '@/lib/fetch'
 import { formatInr, parseDecimal } from '@/lib/sales/formatCurrency'
+import { calculateLineGst, roundMoney } from '@/lib/sales/gstCalculations'
 import { Plus, Search, Trash2, X } from 'lucide-react'
 
 interface CustomerOption {
@@ -45,6 +46,9 @@ export function InvoiceCreateModal({
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [invoiceNumber, setInvoiceNumber] = useState<number | ''>('')
   const [receivedAmount, setReceivedAmount] = useState('0')
+  const [receivedEdited, setReceivedEdited] = useState(false)
+  const [applyGst, setApplyGst] = useState(false)
+  const [gstPercent, setGstPercent] = useState('0')
   const [lines, setLines] = useState<LineDraft[]>([])
   const [itemSearch, setItemSearch] = useState('')
   const [itemDropdownOpen, setItemDropdownOpen] = useState(false)
@@ -58,7 +62,7 @@ export function InvoiceCreateModal({
   useEffect(() => {
     const load = async () => {
       const token = localStorage.getItem('accessToken')
-      const [custRes, skuRes, numRes] = await Promise.all([
+      const [custRes, skuRes, numRes, basicsRes] = await Promise.all([
         fetch(`/api/sales/customers?inventoryId=${inventoryId}&page=1&pageSize=500&activeOnly=true`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -66,27 +70,46 @@ export function InvoiceCreateModal({
         fetch(`/api/sales/invoices/next-number?inventoryId=${inventoryId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        fetch(`/api/sales/basics?inventoryId=${inventoryId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ])
       const custJson = await custRes.json()
       const skuJson = await skuRes.json()
       const numJson = await numRes.json()
+      const basicsJson = await basicsRes.json()
       setCustomers((custJson.data || []).filter((c: CustomerOption & { isActive?: boolean }) => c.isActive !== false))
       setSkus(skuJson.data || [])
       if (numJson.data?.nextNumber) setInvoiceNumber(numJson.data.nextNumber)
+      const defaultGst = parseDecimal(basicsJson.data?.defaultGstPercent)
+      setGstPercent(String(defaultGst))
     }
     load().catch(console.error)
   }, [inventoryId])
 
   const selectedCustomer = customers.find((c) => c.id === customerId)
 
-  const subTotal = useMemo(
+  const gstRate = parseFloat(gstPercent) || 0
+
+  const lineCalcs = useMemo(
     () =>
-      lines.reduce((sum, l) => {
+      lines.map((l) => {
         const price = parseDecimal(l.sku.price)
-        return sum + price * l.quantity
-      }, 0),
-    [lines]
+        return calculateLineGst(price, l.quantity, gstRate, applyGst)
+      }),
+    [lines, gstRate, applyGst]
   )
+
+  const subTotal = useMemo(
+    () => roundMoney(lineCalcs.reduce((sum, c) => sum + c.lineTotal, 0)),
+    [lineCalcs]
+  )
+
+  useEffect(() => {
+    if (!receivedEdited) {
+      setReceivedAmount(subTotal.toFixed(2))
+    }
+  }, [subTotal, receivedEdited])
 
   const customerOptions = customers.map((c) => ({ value: c.id, label: c.name }))
 
@@ -151,6 +174,10 @@ export function InvoiceCreateModal({
       setError('Add at least one item')
       return
     }
+    if (applyGst && gstRate <= 0) {
+      setError('Enter a GST percentage or set it in Basics')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -163,6 +190,8 @@ export function InvoiceCreateModal({
           invoiceNumber: invoiceNumber === '' ? undefined : invoiceNumber,
           invoiceDate,
           receivedAmount: parseFloat(receivedAmount) || 0,
+          applyGst,
+          gstPercent: applyGst ? gstRate : 0,
           lines: lines.map((l) => ({ skuId: l.skuId, quantity: l.quantity })),
         }),
       })
@@ -237,6 +266,37 @@ export function InvoiceCreateModal({
             </div>
           </div>
 
+          <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 flex flex-wrap items-end gap-3">
+            <label className="flex items-center gap-2 text-xs font-medium text-gray-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={applyGst}
+                onChange={(e) => setApplyGst(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Apply GST on this invoice
+            </label>
+            {applyGst && (
+              <div className="w-28">
+                <label className="text-[11px] text-gray-600">GST %</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  className="input mt-0.5 w-full text-xs"
+                  value={gstPercent}
+                  onChange={(e) => setGstPercent(e.target.value)}
+                />
+              </div>
+            )}
+            {applyGst && gstRate > 0 && (
+              <p className="text-[10px] text-gray-500 flex-1 min-w-[200px]">
+                Line amount stays at SKU price. MRP on print = price − (GST% × price). CGST/SGST each use half the GST rate.
+              </p>
+            )}
+          </div>
+
           {selectedCustomer && (
             <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-xs text-gray-700 space-y-1">
               <div className="font-semibold text-gray-900">Bill To: M/s {selectedCustomer.name}</div>
@@ -247,8 +307,8 @@ export function InvoiceCreateModal({
             </div>
           )}
 
-          <div className="rounded-lg border border-gray-200 p-3 space-y-2">
-            <div className="text-xs font-semibold text-gray-800">Add items</div>
+          <div className="rounded-lg border border-gray-200 p-3 space-y-2 max-h-[min(42vh,360px)] overflow-y-auto">
+            <div className="text-xs font-semibold text-gray-800 sticky top-0 bg-white pb-1">Add items</div>
             <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_110px_140px_90px] gap-2 items-start">
               <div className="relative min-w-0" ref={itemDropdownRef}>
                 <label className="text-[11px] text-gray-600">Item</label>
@@ -332,13 +392,14 @@ export function InvoiceCreateModal({
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50">
+          <div className="overflow-auto max-h-[min(32vh,280px)] rounded-lg border border-gray-200">
+            <table className="w-full text-xs min-w-[520px]">
+              <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
                   <th className="text-left p-2">#</th>
                   <th className="text-left p-2">Item</th>
                   <th className="text-right p-2">MRP</th>
+                  {applyGst && <th className="text-right p-2">GST</th>}
                   <th className="text-center p-2">Qty</th>
                   <th className="text-center p-2">Unit</th>
                   <th className="text-right p-2">Amount</th>
@@ -348,22 +409,26 @@ export function InvoiceCreateModal({
               <tbody>
                 {lines.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-4 text-center text-gray-400">
+                    <td colSpan={applyGst ? 8 : 7} className="p-4 text-center text-gray-400">
                       No items yet — add products above
                     </td>
                   </tr>
                 ) : (
                   lines.map((l, i) => {
-                    const price = parseDecimal(l.sku.price)
-                    const amt = price * l.quantity
+                    const calc = lineCalcs[i]
                     return (
                       <tr key={l.skuId} className="border-t border-gray-100">
                         <td className="p-2">{i + 1}</td>
                         <td className="p-2">{l.sku.name}</td>
-                        <td className="p-2 text-right">{formatInr(price)}</td>
+                        <td className="p-2 text-right">{formatInr(calc.displayMrp)}</td>
+                        {applyGst && (
+                          <td className="p-2 text-right text-[11px] text-gray-600">
+                            {calc.gstPercent}% · {formatInr(calc.gstAmount)}
+                          </td>
+                        )}
                         <td className="p-2 text-center">{l.quantity}</td>
                         <td className="p-2 text-center">{l.sku.unit}</td>
-                        <td className="p-2 text-right font-medium">{formatInr(amt)}</td>
+                        <td className="p-2 text-right font-medium">{formatInr(calc.lineTotal)}</td>
                         <td className="p-2">
                           <button
                             type="button"
@@ -390,7 +455,10 @@ export function InvoiceCreateModal({
                 step="0.01"
                 className="input mt-1 w-full"
                 value={receivedAmount}
-                onChange={(e) => setReceivedAmount(e.target.value)}
+                onChange={(e) => {
+                  setReceivedEdited(true)
+                  setReceivedAmount(e.target.value)
+                }}
               />
             </div>
             <div className="text-right">

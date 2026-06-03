@@ -20,6 +20,7 @@ interface BasicsForm {
   ifscCode: string
   accountHolderName: string
   termsAndConditions: string
+  defaultGstPercent: string
 }
 
 const emptyForm = (): BasicsForm => ({
@@ -36,6 +37,7 @@ const emptyForm = (): BasicsForm => ({
   ifscCode: '',
   accountHolderName: '',
   termsAndConditions: 'Thanks for doing business with us!',
+  defaultGstPercent: '0',
 })
 
 function formatApiError(err: unknown, fallback: string): string {
@@ -103,6 +105,7 @@ export default function SalesBasicsPage() {
           ifscCode: b.ifscCode || '',
           accountHolderName: b.accountHolderName || '',
           termsAndConditions: b.termsAndConditions || '',
+          defaultGstPercent: String(b.defaultGstPercent ?? 0),
         })
         setLogoPreview(b.logoUrl || getPublicUploadUrl(logoPath) || null)
         setQrPreview(b.qrCodeUrl || getPublicUploadUrl(qrPath) || null)
@@ -201,6 +204,7 @@ export default function SalesBasicsPage() {
           ifscCode: form.ifscCode,
           accountHolderName: form.accountHolderName,
           termsAndConditions: form.termsAndConditions,
+          defaultGstPercent: parseFloat(form.defaultGstPercent) || 0,
         }),
       })
       if (!res.ok) {
@@ -321,6 +325,18 @@ export default function SalesBasicsPage() {
             <div>
               <label className="text-xs text-gray-600">State (e.g. 18-Assam)</label>
               <input className="input mt-1 w-full" value={form.stateLabel} onChange={(e) => patch({ stateLabel: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-600">Default GST % (for new invoices)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                className="input mt-1 w-full"
+                value={form.defaultGstPercent}
+                onChange={(e) => patch({ defaultGstPercent: e.target.value })}
+              />
             </div>
           </div>
         </section>

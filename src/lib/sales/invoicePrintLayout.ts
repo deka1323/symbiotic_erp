@@ -1,11 +1,9 @@
 import type { InvoiceLineDto } from './invoiceTypes'
 
-/** Item rows per page (body only, after fixed header) */
-export const ITEM_ROWS_MIDDLE_PAGE = 16
-/** Last page: fewer rows because closing blocks need space */
-export const ITEM_ROWS_LAST_PAGE_MAX = 9
-/** Single-page invoice max items (all sections on one page) */
-export const ITEM_ROWS_SINGLE_PAGE = 11
+/** Item rows per page (slimmer header frees vertical space) */
+export const ITEM_ROWS_MIDDLE_PAGE = 18
+export const ITEM_ROWS_LAST_PAGE_MAX = 10
+export const ITEM_ROWS_SINGLE_PAGE = 12
 
 export interface InvoicePagePlan {
   pageNumber: number
