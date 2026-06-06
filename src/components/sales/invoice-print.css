@@ -1,7 +1,7 @@
 /* Professional tax invoice — print-first layout */
 
 .invoice-print-root {
-  font-family: Georgia, 'Times New Roman', 'Liberation Serif', 'Palatino Linotype', serif;
+  font-family: Arial, Helvetica, 'Segoe UI', sans-serif;
   font-size: 8.5pt;
   color: #111;
   line-height: 1.35;
@@ -61,7 +61,7 @@
   font-weight: 800;
   font-size: 11pt;
   padding: 2mm 2mm 1.8mm;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   border-bottom-width: 1.5px;
 }

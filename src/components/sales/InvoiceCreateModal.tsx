@@ -169,12 +169,13 @@ export function InvoiceCreateModal({
   const [itemSearch, setItemSearch] = useState('')
   const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set())
   const [pickerQty, setPickerQty] = useState<Record<string, number>>({})
+  const [showCustomForm, setShowCustomForm] = useState(false)
   const [customDraft, setCustomDraft] = useState({
     itemName: '',
     unit: 'pcs',
     pricePerUnit: '',
     quantity: '1',
-    discountType: 'none' as DiscountType,
+    discountType: 'amount' as DiscountType,
     discountValue: '',
   })
   const [saving, setSaving] = useState(false)
@@ -274,7 +275,7 @@ export function InvoiceCreateModal({
         skuId,
         sku,
         quantity: pickerQty[skuId],
-        discountType: 'none',
+        discountType: 'amount',
         discountValue: 0,
       })
     }
@@ -319,9 +320,10 @@ export function InvoiceCreateModal({
       unit: 'pcs',
       pricePerUnit: '',
       quantity: '1',
-      discountType: 'none',
+      discountType: 'amount',
       discountValue: '',
     })
+    setShowCustomForm(false)
   }
 
   const patchLine = (localId: string, patch: Partial<LineDraft>) => {
@@ -401,9 +403,13 @@ export function InvoiceCreateModal({
   const pickerReady =
     pickerSelected.size > 0 && [...pickerSelected].every((id) => pickerQty[id] >= 1)
 
-  const lineTable = (preview = false) => (
-    <div className="rounded-lg border border-gray-200 overflow-x-auto">
-      <table className="w-full text-xs min-w-[720px]">
+  const lineTable = (preview = false, embedded = false) => (
+    <div
+      className={`rounded-lg border border-gray-200 overflow-x-auto flex flex-col min-h-0 ${
+        embedded ? 'flex-1' : ''
+      }`}
+    >
+      <table className="w-full text-xs min-w-[520px]">
         <thead className="bg-gray-50">
           <tr>
             <th className="p-2 text-left">#</th>
@@ -421,7 +427,7 @@ export function InvoiceCreateModal({
           {lines.length === 0 ? (
             <tr>
               <td colSpan={preview ? 6 : 9} className="p-6 text-center text-gray-400">
-                Add SKU or custom items below
+                Add items from the SKU list
               </td>
             </tr>
           ) : (
@@ -471,6 +477,7 @@ export function InvoiceCreateModal({
                           step="0.01"
                           disabled={l.discountType === 'none'}
                           className="w-full py-0.5 px-1 text-xs text-center border border-gray-200 rounded disabled:bg-gray-50"
+                          placeholder={l.discountType === 'amount' ? '₹' : l.discountType === 'percent' ? '%' : ''}
                           value={l.discountType === 'none' ? '' : l.discountValue || ''}
                           onChange={(e) =>
                             patchLine(l.localId, {
@@ -666,131 +673,150 @@ export function InvoiceCreateModal({
           </p>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-          <div className="rounded-lg border border-gray-200 p-2.5 space-y-2 bg-gray-50/40">
-            <div className="text-xs font-semibold">Add SKU items</div>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+          <div className="lg:col-span-2 rounded-lg border border-gray-200 p-2.5 space-y-2 bg-gray-50/40 flex flex-col">
+            <div className="text-xs font-semibold text-gray-800">Add SKU items</div>
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 value={itemSearch}
                 onChange={(e) => setItemSearch(e.target.value)}
-                placeholder="Search…"
+                placeholder="Search name or code…"
                 className="input w-full pl-8 py-1.5 text-xs"
               />
             </div>
-            <div className="h-32 border border-gray-200 rounded-md bg-white overflow-y-auto">
+            <div className="h-36 lg:flex-1 lg:min-h-[10rem] lg:max-h-64 border border-gray-200 rounded-md bg-white overflow-y-auto">
               <ul>
-                {filteredSkuOptions.map((sku) => (
-                  <li key={sku.id} className={`border-b border-gray-50 ${pickerSelected.has(sku.id) ? 'bg-blue-50' : ''}`}>
-                    <div className="flex items-center gap-2 px-2 py-1.5">
-                      <input
-                        type="checkbox"
-                        checked={pickerSelected.has(sku.id)}
-                        onChange={() => togglePickerSku(sku.id)}
-                        className="rounded"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium truncate">{sku.name}</div>
-                        <div className="text-[10px] text-gray-500">
-                          {formatInr(parseDecimal(sku.price))}/{sku.unit}
-                        </div>
-                      </div>
-                      {pickerSelected.has(sku.id) && (
+                {filteredSkuOptions.length === 0 ? (
+                  <li className="px-3 py-6 text-center text-xs text-gray-400">No items found</li>
+                ) : (
+                  filteredSkuOptions.map((sku) => (
+                    <li
+                      key={sku.id}
+                      className={`border-b border-gray-50 last:border-0 ${pickerSelected.has(sku.id) ? 'bg-blue-50' : ''}`}
+                    >
+                      <div className="flex items-center gap-2 px-2 py-1.5">
                         <input
-                          type="number"
-                          min={1}
-                          className="w-11 py-0.5 text-xs text-center border rounded"
-                          value={pickerQty[sku.id] || ''}
-                          onChange={(e) =>
-                            setPickerQty((q) => ({
-                              ...q,
-                              [sku.id]: Math.max(0, parseInt(e.target.value, 10) || 0),
-                            }))
-                          }
+                          type="checkbox"
+                          checked={pickerSelected.has(sku.id)}
+                          onChange={() => togglePickerSku(sku.id)}
+                          className="rounded"
                         />
-                      )}
-                    </div>
-                  </li>
-                ))}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium truncate">{sku.name}</div>
+                          <div className="text-[10px] text-gray-500">
+                            {formatInr(parseDecimal(sku.price))}/{sku.unit}
+                          </div>
+                        </div>
+                        {pickerSelected.has(sku.id) && (
+                          <input
+                            type="number"
+                            min={1}
+                            className="w-11 py-0.5 text-xs text-center border rounded"
+                            value={pickerQty[sku.id] || ''}
+                            onChange={(e) =>
+                              setPickerQty((q) => ({
+                                ...q,
+                                [sku.id]: Math.max(0, parseInt(e.target.value, 10) || 0),
+                              }))
+                            }
+                          />
+                        )}
+                      </div>
+                    </li>
+                  ))
+                )}
               </ul>
             </div>
             <button
               type="button"
               disabled={!pickerReady}
               onClick={addSelectedFromPicker}
-              className="w-full py-1.5 text-xs bg-blue-600 text-white rounded-lg disabled:opacity-50 flex items-center justify-center gap-1"
+              className="w-full py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg disabled:opacity-50 flex items-center justify-center gap-1"
             >
-              <Plus className="w-3.5 h-3.5" /> Add SKU lines
+              <Plus className="w-3.5 h-3.5" /> Add to invoice
+              {pickerSelected.size > 0 ? ` (${pickerSelected.size})` : ''}
             </button>
           </div>
 
-          <div className="xl:col-span-2 rounded-lg border border-gray-200 p-2.5 space-y-2 bg-amber-50/30">
-            <div className="text-xs font-semibold">Add custom item (not in SKU list)</div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-              <input
-                placeholder="Item name *"
-                className="input text-xs col-span-2"
-                value={customDraft.itemName}
-                onChange={(e) => setCustomDraft((d) => ({ ...d, itemName: e.target.value }))}
-              />
-              <input
-                placeholder="Unit *"
-                className="input text-xs"
-                value={customDraft.unit}
-                onChange={(e) => setCustomDraft((d) => ({ ...d, unit: e.target.value }))}
-              />
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="Price *"
-                className="input text-xs"
-                value={customDraft.pricePerUnit}
-                onChange={(e) => setCustomDraft((d) => ({ ...d, pricePerUnit: e.target.value }))}
-              />
-              <input
-                type="number"
-                min={1}
-                placeholder="Qty *"
-                className="input text-xs"
-                value={customDraft.quantity}
-                onChange={(e) => setCustomDraft((d) => ({ ...d, quantity: e.target.value }))}
-              />
-              <select
-                className="input text-xs"
-                value={customDraft.discountType}
-                onChange={(e) =>
-                  setCustomDraft((d) => ({ ...d, discountType: e.target.value as DiscountType }))
-                }
-              >
-                <option value="none">No disc.</option>
-                <option value="amount">Disc ₹</option>
-                <option value="percent">Disc %</option>
-              </select>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="Disc val"
-                disabled={customDraft.discountType === 'none'}
-                className="input text-xs disabled:bg-gray-50"
-                value={customDraft.discountValue}
-                onChange={(e) => setCustomDraft((d) => ({ ...d, discountValue: e.target.value }))}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={addCustomLine}
-              className="py-1.5 px-3 text-xs border border-amber-300 bg-white rounded-lg hover:bg-amber-50"
-            >
-              Add custom line
-            </button>
+          <div className="lg:col-span-3 flex flex-col min-h-[14rem] lg:min-h-[18rem]">
+            <div className="text-xs font-semibold text-gray-800 mb-1.5">Line items ({lines.length})</div>
+            <div className="flex-1 min-h-0 overflow-auto">{lineTable(false, true)}</div>
           </div>
         </div>
 
         <div>
-          <div className="text-xs font-semibold mb-1.5">Line items ({lines.length})</div>
-          {lineTable(false)}
+          <button
+            type="button"
+            onClick={() => setShowCustomForm((v) => !v)}
+            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+          >
+            {showCustomForm ? '− Hide custom item' : '+ Add custom item (not in SKU list)'}
+          </button>
+          {showCustomForm && (
+            <div className="mt-2 rounded-lg border border-amber-200 p-2.5 space-y-2 bg-amber-50/40">
+              <div className="text-xs font-semibold text-gray-800">Custom line item</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                <input
+                  placeholder="Item name *"
+                  className="input text-xs col-span-2"
+                  value={customDraft.itemName}
+                  onChange={(e) => setCustomDraft((d) => ({ ...d, itemName: e.target.value }))}
+                />
+                <input
+                  placeholder="Unit *"
+                  className="input text-xs"
+                  value={customDraft.unit}
+                  onChange={(e) => setCustomDraft((d) => ({ ...d, unit: e.target.value }))}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="Price *"
+                  className="input text-xs"
+                  value={customDraft.pricePerUnit}
+                  onChange={(e) => setCustomDraft((d) => ({ ...d, pricePerUnit: e.target.value }))}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Qty *"
+                  className="input text-xs"
+                  value={customDraft.quantity}
+                  onChange={(e) => setCustomDraft((d) => ({ ...d, quantity: e.target.value }))}
+                />
+                <select
+                  className="input text-xs"
+                  value={customDraft.discountType}
+                  onChange={(e) =>
+                    setCustomDraft((d) => ({ ...d, discountType: e.target.value as DiscountType }))
+                  }
+                >
+                  <option value="none">No disc.</option>
+                  <option value="amount">Disc ₹</option>
+                  <option value="percent">Disc %</option>
+                </select>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="Disc ₹"
+                  disabled={customDraft.discountType === 'none'}
+                  className="input text-xs disabled:bg-gray-50"
+                  value={customDraft.discountValue}
+                  onChange={(e) => setCustomDraft((d) => ({ ...d, discountValue: e.target.value }))}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={addCustomLine}
+                className="py-1.5 px-3 text-xs font-medium border border-amber-300 bg-white rounded-lg hover:bg-amber-50"
+              >
+                Add custom line
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </InvoiceModalShell>

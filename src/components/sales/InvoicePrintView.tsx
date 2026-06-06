@@ -100,7 +100,6 @@ function ItemsTableSection({
   totalAmount,
   totalDiscount,
   totalGst,
-  applyGst,
 }: {
   lines: InvoiceLineDto[]
   showTotal: boolean
@@ -108,7 +107,6 @@ function ItemsTableSection({
   totalAmount: number
   totalDiscount: number
   totalGst: number
-  applyGst: boolean
 }) {
   return (
     <div className="inv-table-wrap">
@@ -163,7 +161,7 @@ function ItemsTableSection({
                   <MoneyStack amount={line.discountAmount} pct={discPct} />
                 </td>
                 <td className="tr">
-                  <MoneyStack amount={line.gstAmount} pct={applyGst ? line.gstPercent : 0} />
+                  {line.gstAmount > 0 ? formatInr(line.gstAmount) : '—'}
                 </td>
                 <td className="tr">{formatInr(line.lineTotal)}</td>
               </tr>
@@ -235,26 +233,18 @@ function TaxTable({ invoice }: { invoice: SalesInvoiceDto }) {
     <table className="inv-tax">
       <thead>
         <tr>
-          <th rowSpan={2}>HSN/ SAC</th>
-          <th rowSpan={2}>Taxable amount</th>
-          <th colSpan={2}>CGST</th>
-          <th colSpan={2}>SGST</th>
-          <th rowSpan={2}>Total Tax Amount</th>
-        </tr>
-        <tr>
-          <th>Rate</th>
-          <th>Amount</th>
-          <th>Rate</th>
-          <th>Amount</th>
+          <th>HSN/ SAC</th>
+          <th>Taxable amount</th>
+          <th>CGST</th>
+          <th>SGST</th>
+          <th>Total Tax Amount</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td>&nbsp;</td>
           <td className="tr">{formatInr(tax.taxableAmount)}</td>
-          <td>{tax.cgstRate ? `${tax.cgstRate}%` : '0%'}</td>
           <td className="tr">{formatInr(tax.cgstAmount)}</td>
-          <td>{tax.sgstRate ? `${tax.sgstRate}%` : '0%'}</td>
           <td className="tr">{formatInr(tax.sgstAmount)}</td>
           <td className="tr">{formatInr(tax.totalTax)}</td>
         </tr>
@@ -263,9 +253,7 @@ function TaxTable({ invoice }: { invoice: SalesInvoiceDto }) {
         <tr>
           <td>Total</td>
           <td className="tr">{formatInr(tax.taxableAmount)}</td>
-          <td>&nbsp;</td>
           <td className="tr">{formatInr(tax.cgstAmount)}</td>
-          <td>&nbsp;</td>
           <td className="tr">{formatInr(tax.sgstAmount)}</td>
           <td className="tr">{formatInr(tax.totalTax)}</td>
         </tr>
@@ -343,7 +331,6 @@ function InvoicePageBody({
           totalAmount={invoice.totalAmount}
           totalDiscount={totalDiscount}
           totalGst={totalGst}
-          applyGst={invoice.applyGst}
         />
       )}
 
