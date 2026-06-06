@@ -3,12 +3,35 @@ import { z } from 'zod'
 import { authMiddleware } from '@/lib/middleware/auth'
 import { prisma } from '@/lib/prisma'
 import { parseDecimal } from '@/lib/sales/formatCurrency'
-import { calculateLineGst, roundMoney } from '@/lib/sales/gstCalculations'
+import {
+  calculateInvoiceLine,
+  lineNameFromSku,
+  roundMoney,
+  type DiscountType,
+} from '@/lib/sales/gstCalculations'
 
-const lineSchema = z.object({
+const discountFields = {
+  discountType: z.enum(['none', 'amount', 'percent']).optional().default('none'),
+  discountValue: z.number().min(0).optional().default(0),
+}
+
+const skuLineSchema = z.object({
+  type: z.literal('sku').optional(),
   skuId: z.string().uuid(),
   quantity: z.number().int().min(1),
+  ...discountFields,
 })
+
+const customLineSchema = z.object({
+  type: z.literal('custom'),
+  itemName: z.string().min(1).max(500),
+  quantity: z.number().int().min(1),
+  unit: z.string().min(1).max(50),
+  pricePerUnit: z.number().min(0),
+  ...discountFields,
+})
+
+const lineSchema = z.union([customLineSchema, skuLineSchema])
 
 const createInvoiceSchema = z.object({
   inventoryId: z.string().uuid(),
@@ -21,11 +44,9 @@ const createInvoiceSchema = z.object({
   lines: z.array(lineSchema).min(1),
 })
 
-function buildItemName(sku: { name: string; description: string | null }) {
-  if (sku.description?.trim()) {
-    return `${sku.name}\n(${sku.description.trim()})`
-  }
-  return sku.name
+function normalizeDiscount(type: DiscountType, value: number): { discountType: DiscountType; discountValue: number } {
+  if (type === 'none' || value <= 0) return { discountType: 'none', discountValue: 0 }
+  return { discountType: type, discountValue: value }
 }
 
 export async function GET(req: NextRequest) {
@@ -126,58 +147,102 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const skuIds = [...new Set(validated.lines.map((l) => l.skuId))]
-    const skus = await prisma.sKU.findMany({
-      where: { id: { in: skuIds }, isActive: true },
-    })
+    const skuIds = [
+      ...new Set(
+        validated.lines
+          .filter((l) => l.type !== 'custom' && 'skuId' in l)
+          .map((l) => (l as z.infer<typeof skuLineSchema>).skuId)
+      ),
+    ]
+
+    const skus =
+      skuIds.length > 0
+        ? await prisma.sKU.findMany({ where: { id: { in: skuIds }, isActive: true } })
+        : []
+
     if (skus.length !== skuIds.length) {
       return NextResponse.json({ error: 'One or more SKUs are invalid' }, { status: 400 })
     }
 
-    const qtyBySku = new Map<string, number>()
-    for (const line of validated.lines) {
-      qtyBySku.set(line.skuId, (qtyBySku.get(line.skuId) || 0) + line.quantity)
-    }
-
     const skuMap = new Map(skus.map((s) => [s.id, s]))
-    const orderedSkuIds: string[] = []
-    for (const line of validated.lines) {
-      if (!orderedSkuIds.includes(line.skuId)) orderedSkuIds.push(line.skuId)
-    }
 
     let lineNo = 1
     let subTotal = 0
     const lineRows: {
-      skuId: string
+      skuId: string | null
       lineNo: number
       itemName: string
       mrp: number
       quantity: number
       unit: string
       pricePerUnit: number
+      discountType: string
+      discountValue: number
+      discountAmount: number
       lineTotal: number
       gstPercent: number
       gstAmount: number
     }[] = []
 
-    for (const skuId of orderedSkuIds) {
-      const sku = skuMap.get(skuId)!
-      const quantity = qtyBySku.get(skuId)!
-      const price = parseDecimal(sku.price)
-      const calc = calculateLineGst(price, quantity, gstPercent, applyGst)
-      subTotal += calc.lineTotal
-      lineRows.push({
-        skuId: sku.id,
-        lineNo: lineNo++,
-        itemName: buildItemName(sku),
-        mrp: calc.displayMrp,
-        quantity: calc.quantity,
-        unit: sku.unit,
-        pricePerUnit: calc.pricePerUnit,
-        lineTotal: calc.lineTotal,
-        gstPercent: calc.gstPercent,
-        gstAmount: calc.gstAmount,
-      })
+    for (const line of validated.lines) {
+      const disc = normalizeDiscount(line.discountType as DiscountType, line.discountValue ?? 0)
+
+      if (line.type === 'custom') {
+        const calc = calculateInvoiceLine({
+          pricePerUnit: line.pricePerUnit,
+          quantity: line.quantity,
+          gstPercent,
+          applyGst,
+          discountType: disc.discountType,
+          discountValue: disc.discountValue,
+        })
+        subTotal += calc.lineTotal
+        lineRows.push({
+          skuId: null,
+          lineNo: lineNo++,
+          itemName: line.itemName.trim(),
+          mrp: calc.displayMrp,
+          quantity: calc.quantity,
+          unit: line.unit.trim(),
+          pricePerUnit: calc.pricePerUnit,
+          discountType: calc.discountType,
+          discountValue: calc.discountValue,
+          discountAmount: calc.discountAmount,
+          lineTotal: calc.lineTotal,
+          gstPercent: calc.gstPercent,
+          gstAmount: calc.gstAmount,
+        })
+      } else {
+        const sku = skuMap.get(line.skuId)
+        if (!sku) {
+          return NextResponse.json({ error: 'Invalid SKU in line items' }, { status: 400 })
+        }
+        const price = parseDecimal(sku.price)
+        const calc = calculateInvoiceLine({
+          pricePerUnit: price,
+          quantity: line.quantity,
+          gstPercent,
+          applyGst,
+          discountType: disc.discountType,
+          discountValue: disc.discountValue,
+        })
+        subTotal += calc.lineTotal
+        lineRows.push({
+          skuId: sku.id,
+          lineNo: lineNo++,
+          itemName: lineNameFromSku(sku),
+          mrp: calc.displayMrp,
+          quantity: calc.quantity,
+          unit: sku.unit,
+          pricePerUnit: calc.pricePerUnit,
+          discountType: calc.discountType,
+          discountValue: calc.discountValue,
+          discountAmount: calc.discountAmount,
+          lineTotal: calc.lineTotal,
+          gstPercent: calc.gstPercent,
+          gstAmount: calc.gstAmount,
+        })
+      }
     }
 
     subTotal = roundMoney(subTotal)
@@ -215,9 +280,7 @@ export async function POST(req: NextRequest) {
         totalAmount,
         applyGst,
         gstPercent,
-        lines: {
-          create: lineRows,
-        },
+        lines: { create: lineRows },
       },
       include: {
         lines: { orderBy: { lineNo: 'asc' } },

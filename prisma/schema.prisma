@@ -323,23 +323,26 @@ model SalesInvoice {
 }
 
 model SalesInvoiceLine {
-  id           String  @id @default(uuid())
-  invoiceId    String  @map("invoice_id")
-  skuId        String  @map("sku_id")
-  lineNo       Int     @map("line_no")
-  itemName     String  @map("item_name") @db.VarChar(500)
-  mrp          Decimal @db.Decimal(12, 2)
-  quantity     Int
-  unit         String  @db.VarChar(50)
-  pricePerUnit Decimal @map("price_per_unit") @db.Decimal(12, 2)
-  lineTotal    Decimal @map("line_total") @db.Decimal(14, 2)
-  gstPercent   Decimal @default(0) @map("gst_percent") @db.Decimal(5, 2)
-  gstAmount    Decimal @default(0) @map("gst_amount") @db.Decimal(14, 2)
+  id             String   @id @default(uuid())
+  invoiceId      String   @map("invoice_id")
+  skuId          String?  @map("sku_id")
+  lineNo         Int      @map("line_no")
+  itemName       String   @map("item_name") @db.VarChar(500)
+  mrp            Decimal  @db.Decimal(12, 2)
+  quantity       Int
+  unit           String   @db.VarChar(50)
+  pricePerUnit   Decimal  @map("price_per_unit") @db.Decimal(12, 2)
+  discountType   String   @default("none") @map("discount_type") @db.VarChar(10)
+  discountValue  Decimal  @default(0) @map("discount_value") @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  lineTotal      Decimal  @map("line_total") @db.Decimal(14, 2)
+  gstPercent     Decimal  @default(0) @map("gst_percent") @db.Decimal(5, 2)
+  gstAmount      Decimal  @default(0) @map("gst_amount") @db.Decimal(14, 2)
 
   invoice SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  sku     SKU          @relation(fields: [skuId], references: [id], onDelete: Restrict)
+  sku     SKU?         @relation(fields: [skuId], references: [id], onDelete: Restrict)
 
-  @@unique([invoiceId, skuId])
+  @@unique([invoiceId, lineNo])
   @@index([invoiceId])
   @@map("sales_invoice_lines")
 }

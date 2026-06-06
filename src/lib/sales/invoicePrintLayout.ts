@@ -1,9 +1,13 @@
 import type { InvoiceLineDto } from './invoiceTypes'
 
-/** Item rows per page (slimmer header frees vertical space) */
+/** Item rows on continuation pages (header only, no footer blocks) */
 export const ITEM_ROWS_MIDDLE_PAGE = 18
-export const ITEM_ROWS_LAST_PAGE_MAX = 10
-export const ITEM_ROWS_SINGLE_PAGE = 12
+/** Max item rows on the closing page (items + summary + tax + footer) */
+export const ITEM_ROWS_LAST_PAGE_MAX = 14
+/** Max items when everything fits on one page */
+export const ITEM_ROWS_SINGLE_PAGE = 14
+/** Avoid a closing page with fewer than this many item rows */
+const MIN_CLOSING_PAGE_ITEMS = 5
 
 export interface InvoicePagePlan {
   pageNumber: number
@@ -16,15 +20,18 @@ export interface InvoicePagePlan {
   showClosingFooter: boolean
 }
 
-export function planInvoicePages(lines: InvoiceLineDto[]): InvoicePagePlan[] {
-  const emptyClosing: Omit<InvoicePagePlan, 'pageNumber' | 'totalPages' | 'lines'> = {
-    showItemsTotal: true,
-    showAmountsBlock: true,
-    showBalance: true,
-    showTaxTable: true,
-    showClosingFooter: true,
-  }
+const emptyClosing: Omit<InvoicePagePlan, 'pageNumber' | 'totalPages' | 'lines'> = {
+  showItemsTotal: true,
+  showAmountsBlock: true,
+  showBalance: true,
+  showTaxTable: true,
+  showClosingFooter: true,
+}
 
+/**
+ * Paginate line items without orphaning a tiny middle page (e.g. 18 + 1 + 10).
+ */
+export function planInvoicePages(lines: InvoiceLineDto[]): InvoicePagePlan[] {
   if (lines.length === 0) {
     return [{ pageNumber: 1, totalPages: 1, lines: [], ...emptyClosing }]
   }
@@ -38,27 +45,61 @@ export function planInvoicePages(lines: InvoiceLineDto[]): InvoicePagePlan[] {
 
   while (index < lines.length) {
     const remaining = lines.length - index
-    const needsClosingPage = remaining <= ITEM_ROWS_LAST_PAGE_MAX
 
-    if (needsClosingPage) {
+    if (remaining <= ITEM_ROWS_LAST_PAGE_MAX) {
+      plans.push({ lines: lines.slice(index), ...emptyClosing })
+      break
+    }
+
+    const afterMiddle = remaining - ITEM_ROWS_MIDDLE_PAGE
+
+    if (afterMiddle > 0 && afterMiddle <= ITEM_ROWS_LAST_PAGE_MAX) {
+      if (afterMiddle >= MIN_CLOSING_PAGE_ITEMS) {
+        plans.push({
+          lines: lines.slice(index, index + ITEM_ROWS_MIDDLE_PAGE),
+          showItemsTotal: false,
+          showAmountsBlock: false,
+          showBalance: false,
+          showTaxTable: false,
+          showClosingFooter: false,
+        })
+        index += ITEM_ROWS_MIDDLE_PAGE
+        continue
+      }
+
+      const middleTake = Math.max(0, remaining - MIN_CLOSING_PAGE_ITEMS)
+      if (middleTake > 0) {
+        plans.push({
+          lines: lines.slice(index, index + middleTake),
+          showItemsTotal: false,
+          showAmountsBlock: false,
+          showBalance: false,
+          showTaxTable: false,
+          showClosingFooter: false,
+        })
+        index += middleTake
+        continue
+      }
+
+      plans.push({ lines: lines.slice(index), ...emptyClosing })
+      break
+    }
+
+    if (remaining > ITEM_ROWS_MIDDLE_PAGE + ITEM_ROWS_LAST_PAGE_MAX) {
       plans.push({
-        lines: lines.slice(index),
-        ...emptyClosing,
-      })
-      index = lines.length
-    } else {
-      const take = Math.min(ITEM_ROWS_MIDDLE_PAGE, remaining - ITEM_ROWS_LAST_PAGE_MAX)
-      const chunkSize = Math.max(1, take)
-      plans.push({
-        lines: lines.slice(index, index + chunkSize),
+        lines: lines.slice(index, index + ITEM_ROWS_MIDDLE_PAGE),
         showItemsTotal: false,
         showAmountsBlock: false,
         showBalance: false,
         showTaxTable: false,
         showClosingFooter: false,
       })
-      index += chunkSize
+      index += ITEM_ROWS_MIDDLE_PAGE
+      continue
     }
+
+    plans.push({ lines: lines.slice(index), ...emptyClosing })
+    break
   }
 
   const totalPages = plans.length
@@ -69,14 +110,8 @@ export function planInvoicePages(lines: InvoiceLineDto[]): InvoicePagePlan[] {
   }))
 }
 
-export function splitItemName(itemName: string): { title: string; subtitle: string | null } {
-  const parts = itemName.split('\n').map((p) => p.trim()).filter(Boolean)
-  if (parts.length <= 1) {
-    const paren = itemName.match(/^(.+?)\s*(\([^)]+\))\s*$/)
-    if (paren) {
-      return { title: paren[1].trim(), subtitle: paren[2].trim() }
-    }
-    return { title: itemName, subtitle: null }
-  }
-  return { title: parts[0], subtitle: parts.slice(1).join(' ') }
+/** Item name only — strip legacy description suffixes */
+export function displayItemName(itemName: string): string {
+  const first = itemName.split('\n')[0]?.trim() || itemName
+  return first.replace(/\s*\([^)]*\)\s*$/, '').trim() || first
 }

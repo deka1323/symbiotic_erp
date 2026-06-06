@@ -1,7 +1,7 @@
 /* Professional tax invoice — print-first layout */
 
 .invoice-print-root {
-  font-family: 'Segoe UI', system-ui, -apple-system, Arial, Helvetica, sans-serif;
+  font-family: Georgia, 'Times New Roman', 'Liberation Serif', 'Palatino Linotype', serif;
   font-size: 8.5pt;
   color: #111;
   line-height: 1.35;
@@ -32,6 +32,8 @@
   display: flex;
   flex-direction: column;
   background: #fff;
+  position: relative;
+  padding-bottom: 6mm;
 }
 
 /* ─── Header ─── */
@@ -72,8 +74,9 @@
 
 .inv-brand-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 3mm;
+  min-height: 14mm;
 }
 
 .inv-ht-logo-wrap {
@@ -131,32 +134,45 @@
   border-left: 1px solid #1a1a1a;
 }
 
-.inv-ht-meta-stack {
+.inv-ht-meta-lines {
   display: flex;
   flex-direction: column;
-  gap: 1.8mm;
+  gap: 1.2mm;
+  align-items: flex-end;
 }
 
-.inv-ht-meta-item {
-  text-align: right;
+.inv-ht-meta-line {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 1.5mm;
+  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .inv-ht-meta-lbl {
-  display: block;
   font-weight: 700;
   font-size: 6.5pt;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: #333;
-  line-height: 1.2;
 }
 
 .inv-ht-meta-val {
-  display: block;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 7.5pt;
-  margin-top: 0.2mm;
-  line-height: 1.2;
+  color: #000;
+}
+
+.inv-page-pill-bottom {
+  position: absolute;
+  right: 4mm;
+  bottom: 2mm;
+  font-size: 7pt;
+  font-weight: 600;
+  color: #444;
+  letter-spacing: 0.02em;
 }
 
 .inv-ht-bill-cell {
@@ -184,11 +200,7 @@
 }
 
 .inv-page-pill {
-  text-align: right;
-  font-size: 6.5pt;
-  color: #555;
-  padding: 1mm 0 0;
-  font-weight: 600;
+  display: none;
 }
 
 /* ─── Body ─── */
@@ -260,6 +272,10 @@
 .inv-table .stack .sub {
   font-size: 6.5pt;
   font-weight: 600;
+}
+
+.inv-table .stack-zero {
+  color: #666;
 }
 
 .inv-table tfoot td {

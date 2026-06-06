@@ -22,9 +22,11 @@ export interface InvoiceBasicsDto {
   defaultGstPercent?: number
 }
 
+export type DiscountType = 'none' | 'amount' | 'percent'
+
 export interface InvoiceLineDto {
   id: string
-  skuId: string
+  skuId: string | null
   lineNo: number
   itemName: string
   mrp: number
@@ -32,8 +34,12 @@ export interface InvoiceLineDto {
   unit: string
   pricePerUnit: number
   lineTotal: number
+  discountType: DiscountType
+  discountValue: number
+  discountAmount: number
   gstPercent: number
   gstAmount: number
+  taxableAmount: number
 }
 
 export interface SalesInvoiceDto {

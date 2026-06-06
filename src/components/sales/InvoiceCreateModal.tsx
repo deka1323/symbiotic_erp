@@ -5,7 +5,11 @@ import { createPortal } from 'react-dom'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { authFetch } from '@/lib/fetch'
 import { formatInr, parseDecimal } from '@/lib/sales/formatCurrency'
-import { calculateLineGst, roundMoney } from '@/lib/sales/gstCalculations'
+import {
+  calculateInvoiceLine,
+  roundMoney,
+  type DiscountType,
+} from '@/lib/sales/gstCalculations'
 import { formatInvoiceDate } from '@/lib/sales/mapInvoice'
 import { Check, Plus, Search, Trash2, X } from 'lucide-react'
 
@@ -15,22 +19,61 @@ interface CustomerOption {
   address?: string | null
   contactNumber?: string | null
   gstNumber?: string | null
-  remark?: string | null
 }
 
 interface SkuOption {
   id: string
   code: string
   name: string
-  description?: string | null
   price: unknown
   unit: string
 }
 
-interface LineDraft {
+interface LineDraftBase {
+  localId: string
+  quantity: number
+  discountType: DiscountType
+  discountValue: number
+}
+
+interface SkuLineDraft extends LineDraftBase {
+  kind: 'sku'
   skuId: string
   sku: SkuOption
-  quantity: number
+}
+
+interface CustomLineDraft extends LineDraftBase {
+  kind: 'custom'
+  itemName: string
+  unit: string
+  pricePerUnit: number
+}
+
+type LineDraft = SkuLineDraft | CustomLineDraft
+
+function newLocalId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return `line-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function lineLabel(l: LineDraft) {
+  return l.kind === 'sku' ? l.sku.name : l.itemName
+}
+
+function linePrice(l: LineDraft) {
+  return l.kind === 'sku' ? parseDecimal(l.sku.price) : l.pricePerUnit
+}
+
+function calcDraftLine(l: LineDraft, gstRate: number, applyGst: boolean) {
+  const qty = l.quantity >= 1 ? l.quantity : 0
+  return calculateInvoiceLine({
+    pricePerUnit: linePrice(l),
+    quantity: qty,
+    gstPercent: gstRate,
+    applyGst,
+    discountType: l.discountType,
+    discountValue: l.discountValue,
+  })
 }
 
 function validateBeforePreview(
@@ -43,7 +86,7 @@ function validateBeforePreview(
   if (lines.length === 0) return 'Add at least one item'
   const missingQty = lines.filter((l) => !l.quantity || l.quantity < 1)
   if (missingQty.length > 0) {
-    return `Enter quantity (min 1) for: ${missingQty.map((l) => l.sku.name).join(', ')}`
+    return `Enter quantity (min 1) for: ${missingQty.map(lineLabel).join(', ')}`
   }
   if (applyGst && gstRate <= 0) return 'Enter a GST percentage or set it in Basics'
   return null
@@ -55,7 +98,7 @@ function InvoiceModalShell({
   onClose,
   children,
   footer,
-  maxWidth = 'max-w-4xl',
+  maxWidth = 'max-w-7xl',
 }: {
   title: string
   subtitle?: string
@@ -79,12 +122,12 @@ function InvoiceModalShell({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-3 sm:p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
     >
       <div
-        className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} max-h-[calc(100vh-2rem)] flex flex-col`}
+        className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} max-h-[calc(100vh-1rem)] flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 shrink-0">
@@ -92,12 +135,7 @@ function InvoiceModalShell({
             <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
             {subtitle && <p className="text-[11px] text-gray-500 mt-0.5">{subtitle}</p>}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
-            aria-label="Close"
-          >
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -131,6 +169,14 @@ export function InvoiceCreateModal({
   const [itemSearch, setItemSearch] = useState('')
   const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set())
   const [pickerQty, setPickerQty] = useState<Record<string, number>>({})
+  const [customDraft, setCustomDraft] = useState({
+    itemName: '',
+    unit: 'pcs',
+    pricePerUnit: '',
+    quantity: '1',
+    discountType: 'none' as DiscountType,
+    discountValue: '',
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
@@ -157,8 +203,7 @@ export function InvoiceCreateModal({
       setCustomers((custJson.data || []).filter((c: CustomerOption & { isActive?: boolean }) => c.isActive !== false))
       setSkus(skuJson.data || [])
       if (numJson.data?.nextNumber) setInvoiceNumber(numJson.data.nextNumber)
-      const defaultGst = parseDecimal(basicsJson.data?.defaultGstPercent)
-      setGstPercent(String(defaultGst))
+      setGstPercent(String(parseDecimal(basicsJson.data?.defaultGstPercent)))
     }
     load().catch(console.error)
   }, [inventoryId])
@@ -167,12 +212,7 @@ export function InvoiceCreateModal({
   const gstRate = parseFloat(gstPercent) || 0
 
   const lineCalcs = useMemo(
-    () =>
-      lines.map((l) => {
-        const price = parseDecimal(l.sku.price)
-        const qty = l.quantity >= 1 ? l.quantity : 0
-        return calculateLineGst(price, qty, gstRate, applyGst)
-      }),
+    () => lines.map((l) => calcDraftLine(l, gstRate, applyGst)),
     [lines, gstRate, applyGst]
   )
 
@@ -184,9 +224,7 @@ export function InvoiceCreateModal({
   const allQuantitiesValid = lines.length > 0 && lines.every((l) => l.quantity >= 1)
 
   useEffect(() => {
-    if (!receivedEdited) {
-      setReceivedAmount(subTotal.toFixed(2))
-    }
+    if (!receivedEdited) setReceivedAmount(subTotal.toFixed(2))
   }, [subTotal, receivedEdited])
 
   const customerOptions = customers.map((c) => ({ value: c.id, label: c.name }))
@@ -195,72 +233,122 @@ export function InvoiceCreateModal({
     const q = itemSearch.trim().toLowerCase()
     const sorted = [...skus].sort((a, b) => a.name.localeCompare(b.name))
     if (!q) return sorted
-    return sorted.filter((sku) => {
-      return (
+    return sorted.filter(
+      (sku) =>
         sku.name.toLowerCase().includes(q) ||
-        sku.code.toLowerCase().includes(q) ||
-        (sku.description || '').toLowerCase().includes(q)
-      )
-    })
+        sku.code.toLowerCase().includes(q)
+    )
   }, [skus, itemSearch])
 
   const togglePickerSku = (skuId: string) => {
     setPickerSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(skuId)) {
-        next.delete(skuId)
-      } else {
+      if (next.has(skuId)) next.delete(skuId)
+      else {
         next.add(skuId)
-        setPickerQty((q) => ({ ...q, [skuId]: q[skuId] && q[skuId] >= 1 ? q[skuId] : 1 }))
+        setPickerQty((q) => ({ ...q, [skuId]: q[skuId] >= 1 ? q[skuId] : 1 }))
       }
       return next
     })
-  }
-
-  const setPickerSkuQty = (skuId: string, raw: string) => {
-    const n = raw === '' ? 0 : Math.max(0, Math.floor(Number(raw) || 0))
-    setPickerQty((q) => ({ ...q, [skuId]: n }))
   }
 
   const addSelectedFromPicker = () => {
     if (pickerSelected.size === 0) {
-      setError('Select at least one item')
+      setError('Select at least one SKU')
       return
     }
     const invalid = [...pickerSelected].filter((id) => !pickerQty[id] || pickerQty[id] < 1)
-    if (invalid.length > 0) {
-      setError('Enter quantity (min 1) for each selected item')
+    if (invalid.length) {
+      setError('Enter quantity for each selected item')
       return
     }
     setError(null)
     const skuMap = new Map(skus.map((s) => [s.id, s]))
-    setLines((prev) => {
-      const next = [...prev]
-      for (const skuId of pickerSelected) {
-        const sku = skuMap.get(skuId)
-        if (!sku) continue
-        const qty = Math.max(1, pickerQty[skuId] || 1)
-        const idx = next.findIndex((l) => l.skuId === skuId)
-        if (idx >= 0) {
-          next[idx] = { ...next[idx], quantity: next[idx].quantity + qty }
-        } else {
-          next.push({ skuId, sku, quantity: qty })
-        }
-      }
-      return next
-    })
+    const newLines: LineDraft[] = []
+    for (const skuId of pickerSelected) {
+      const sku = skuMap.get(skuId)
+      if (!sku) continue
+      newLines.push({
+        kind: 'sku',
+        localId: newLocalId(),
+        skuId,
+        sku,
+        quantity: pickerQty[skuId],
+        discountType: 'none',
+        discountValue: 0,
+      })
+    }
+    setLines((prev) => [...prev, ...newLines])
     setPickerSelected(new Set())
     setPickerQty({})
   }
 
-  const updateLineQty = (skuId: string, raw: string) => {
-    const parsed = raw === '' ? 0 : Math.max(0, Math.floor(Number(raw) || 0))
-    setLines((prev) => prev.map((l) => (l.skuId === skuId ? { ...l, quantity: parsed } : l)))
+  const addCustomLine = () => {
+    const name = customDraft.itemName.trim()
+    const unit = customDraft.unit.trim()
+    const price = parseFloat(customDraft.pricePerUnit)
+    const qty = parseInt(customDraft.quantity, 10)
+    if (!name || !unit) {
+      setError('Custom item needs name and unit')
+      return
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      setError('Enter a valid price for custom item')
+      return
+    }
+    if (!qty || qty < 1) {
+      setError('Enter quantity (min 1) for custom item')
+      return
+    }
+    setError(null)
+    setLines((prev) => [
+      ...prev,
+      {
+        kind: 'custom',
+        localId: newLocalId(),
+        itemName: name,
+        unit,
+        pricePerUnit: price,
+        quantity: qty,
+        discountType: customDraft.discountType,
+        discountValue: parseFloat(customDraft.discountValue) || 0,
+      },
+    ])
+    setCustomDraft({
+      itemName: '',
+      unit: 'pcs',
+      pricePerUnit: '',
+      quantity: '1',
+      discountType: 'none',
+      discountValue: '',
+    })
   }
 
-  const removeLine = (skuId: string) => {
-    setLines((prev) => prev.filter((l) => l.skuId !== skuId))
+  const patchLine = (localId: string, patch: Partial<LineDraft>) => {
+    setLines((prev) =>
+      prev.map((l) => (l.localId === localId ? ({ ...l, ...patch } as LineDraft) : l))
+    )
   }
+
+  const removeLine = (localId: string) => {
+    setLines((prev) => prev.filter((l) => l.localId !== localId))
+  }
+
+  const serializeLines = () =>
+    lines.map((l) => {
+      const disc = { discountType: l.discountType, discountValue: l.discountValue }
+      if (l.kind === 'custom') {
+        return {
+          type: 'custom' as const,
+          itemName: l.itemName,
+          unit: l.unit,
+          pricePerUnit: l.pricePerUnit,
+          quantity: l.quantity,
+          ...disc,
+        }
+      }
+      return { skuId: l.skuId, quantity: l.quantity, ...disc }
+    })
 
   const handleOpenPreview = () => {
     const err = validateBeforePreview(customerId, lines, applyGst, gstRate)
@@ -293,12 +381,12 @@ export function InvoiceCreateModal({
           receivedAmount: parseFloat(receivedAmount) || 0,
           applyGst,
           gstPercent: applyGst ? gstRate : 0,
-          lines: lines.map((l) => ({ skuId: l.skuId, quantity: l.quantity })),
+          lines: serializeLines(),
         }),
       })
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}))
-        throw new Error(errBody.error || 'Failed to create invoice')
+        throw new Error(typeof errBody.error === 'string' ? errBody.error : 'Failed to create invoice')
       }
       const json = await res.json()
       onCreated(json.data.id)
@@ -310,22 +398,131 @@ export function InvoiceCreateModal({
     }
   }
 
+  const pickerReady =
+    pickerSelected.size > 0 && [...pickerSelected].every((id) => pickerQty[id] >= 1)
+
+  const lineTable = (preview = false) => (
+    <div className="rounded-lg border border-gray-200 overflow-x-auto">
+      <table className="w-full text-xs min-w-[720px]">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="p-2 text-left">#</th>
+            <th className="p-2 text-left">Item</th>
+            <th className="p-2 text-right">Rate</th>
+            <th className="p-2 text-center w-16">Qty</th>
+            {!preview && <th className="p-2 text-center w-24">Disc.</th>}
+            {!preview && <th className="p-2 text-center w-20">Disc val</th>}
+            {applyGst && <th className="p-2 text-right">GST</th>}
+            <th className="p-2 text-right">Amount</th>
+            {!preview && <th className="w-8" />}
+          </tr>
+        </thead>
+        <tbody>
+          {lines.length === 0 ? (
+            <tr>
+              <td colSpan={preview ? 6 : 9} className="p-6 text-center text-gray-400">
+                Add SKU or custom items below
+              </td>
+            </tr>
+          ) : (
+            lines.map((l, i) => {
+              const calc = lineCalcs[i]
+              return (
+                <tr key={l.localId} className="border-t border-gray-100">
+                  <td className="p-2">{i + 1}</td>
+                  <td className="p-2 font-medium">{lineLabel(l)}</td>
+                  <td className="p-2 text-right">{formatInr(linePrice(l))}</td>
+                  <td className="p-2">
+                    {preview ? (
+                      <span className="block text-center">{l.quantity}</span>
+                    ) : (
+                      <input
+                        type="number"
+                        min={1}
+                        className="w-full py-0.5 px-1 text-xs text-center border border-gray-200 rounded"
+                        value={l.quantity}
+                        onChange={(e) =>
+                          patchLine(l.localId, {
+                            quantity: Math.max(0, parseInt(e.target.value, 10) || 0),
+                          })
+                        }
+                      />
+                    )}
+                  </td>
+                  {!preview && (
+                    <>
+                      <td className="p-2">
+                        <select
+                          className="w-full py-0.5 text-xs border border-gray-200 rounded"
+                          value={l.discountType}
+                          onChange={(e) =>
+                            patchLine(l.localId, { discountType: e.target.value as DiscountType })
+                          }
+                        >
+                          <option value="none">None</option>
+                          <option value="amount">₹</option>
+                          <option value="percent">%</option>
+                        </select>
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          disabled={l.discountType === 'none'}
+                          className="w-full py-0.5 px-1 text-xs text-center border border-gray-200 rounded disabled:bg-gray-50"
+                          value={l.discountType === 'none' ? '' : l.discountValue || ''}
+                          onChange={(e) =>
+                            patchLine(l.localId, {
+                              discountValue: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                        />
+                      </td>
+                    </>
+                  )}
+                  {applyGst && (
+                    <td className="p-2 text-right text-gray-600">
+                      {calc.gstPercent}% · {formatInr(calc.gstAmount)}
+                    </td>
+                  )}
+                  <td className="p-2 text-right font-semibold">{formatInr(calc.lineTotal)}</td>
+                  {!preview && (
+                    <td className="p-2">
+                      <button
+                        type="button"
+                        onClick={() => removeLine(l.localId)}
+                        className="text-red-500 hover:bg-red-50 p-0.5 rounded"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              )
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+
   if (showPreview && selectedCustomer) {
     return (
       <InvoiceModalShell
         title="Confirm invoice"
         subtitle="Review before creating and printing"
         onClose={() => !saving && setShowPreview(false)}
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-5xl"
         footer={
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowPreview(false)}
               disabled={saving}
-              className="px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
+              className="px-3 py-1.5 text-xs border rounded-lg bg-white"
             >
-              Back to edit
+              Back
             </button>
             <button
               type="button"
@@ -356,88 +553,55 @@ export function InvoiceCreateModal({
             </div>
             <div className="col-span-2">
               <span className="text-gray-500">Customer</span>
-              <p className="font-semibold">M/s {selectedCustomer.name}</p>
+              <p className="font-semibold">{selectedCustomer.name}</p>
             </div>
           </div>
-          <div className="rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left p-2">#</th>
-                  <th className="text-left p-2">Item</th>
-                  <th className="text-center p-2">Qty</th>
-                  <th className="text-right p-2">Rate</th>
-                  {applyGst && <th className="text-right p-2">GST</th>}
-                  <th className="text-right p-2">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((l, i) => {
-                  const calc = lineCalcs[i]
-                  return (
-                    <tr key={l.skuId} className="border-t border-gray-100">
-                      <td className="p-2">{i + 1}</td>
-                      <td className="p-2 font-medium">{l.sku.name}</td>
-                      <td className="p-2 text-center">{l.quantity}</td>
-                      <td className="p-2 text-right">{formatInr(parseDecimal(l.sku.price))}</td>
-                      {applyGst && (
-                        <td className="p-2 text-right text-gray-600">
-                          {calc.gstPercent}% · {formatInr(calc.gstAmount)}
-                        </td>
-                      )}
-                      <td className="p-2 text-right font-medium">{formatInr(calc.lineTotal)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <tfoot className="bg-gray-50 font-semibold border-t border-gray-200">
-                <tr>
-                  <td colSpan={applyGst ? 5 : 4} className="p-2 text-right">
-                    Total
-                  </td>
-                  <td className="p-2 text-right">{formatInr(subTotal)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={applyGst ? 5 : 4} className="p-2 text-right text-gray-600 font-normal">
-                    Received
-                  </td>
-                  <td className="p-2 text-right">{formatInr(parseFloat(receivedAmount) || 0)}</td>
-                </tr>
-              </tfoot>
-            </table>
+          {lineTable(true)}
+          <div className="flex justify-between text-sm font-semibold px-1">
+            <span>Total</span>
+            <span>{formatInr(subTotal)}</span>
           </div>
         </div>
       </InvoiceModalShell>
     )
   }
 
-  const pickerReady =
-    pickerSelected.size > 0 && [...pickerSelected].every((id) => pickerQty[id] >= 1)
-
   return (
     <InvoiceModalShell
       title="Create Tax Invoice"
-      subtitle="Select items with quantity, review lines, then preview"
+      subtitle="Add SKU or custom lines with optional discount per item"
       onClose={onClose}
       footer={
         <div className="flex items-center justify-between gap-3">
-          <div className="text-xs text-gray-600">
-            <span className="text-gray-500">Total </span>
-            <span className="text-base font-bold text-gray-900">{formatInr(subTotal)}</span>
+          <div className="flex items-center gap-4">
+            <div className="text-xs">
+              <span className="text-gray-500">Total </span>
+              <span className="text-base font-bold">{formatInr(subTotal)}</span>
+            </div>
+            <div className="w-32">
+              <label className="text-[10px] text-gray-500">Received ₹</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="input w-full py-1 text-xs mt-0.5"
+                value={receivedAmount}
+                onChange={(e) => {
+                  setReceivedEdited(true)
+                  setReceivedAmount(e.target.value)
+                }}
+              />
+            </div>
           </div>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-            >
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs border rounded-lg bg-white">
               Cancel
             </button>
             <button
               type="button"
-              disabled={!customerId || lines.length === 0 || !allQuantitiesValid}
+              disabled={!customerId || !allQuantitiesValid}
               onClick={handleOpenPreview}
-              className="px-4 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg disabled:opacity-50"
             >
               Preview & Create
             </button>
@@ -447,13 +611,11 @@ export function InvoiceCreateModal({
     >
       <div className="p-4 space-y-3">
         {error && (
-          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            {error}
-          </div>
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-          <div className="lg:col-span-5">
+        <div className="grid grid-cols-2 lg:grid-cols-12 gap-3">
+          <div className="col-span-2 lg:col-span-5">
             <label className="text-xs font-medium text-gray-700">Customer</label>
             <SearchableSelect
               options={customerOptions}
@@ -465,7 +627,7 @@ export function InvoiceCreateModal({
               className="mt-1"
             />
           </div>
-          <div className="lg:col-span-3">
+          <div className="col-span-1 lg:col-span-2">
             <label className="text-xs font-medium text-gray-700">Invoice No.</label>
             <input
               type="number"
@@ -474,23 +636,13 @@ export function InvoiceCreateModal({
               onChange={(e) => setInvoiceNumber(e.target.value ? parseInt(e.target.value, 10) : '')}
             />
           </div>
-          <div className="lg:col-span-2">
+          <div className="col-span-1 lg:col-span-2">
             <label className="text-xs font-medium text-gray-700">Date</label>
-            <input
-              type="date"
-              className="input mt-1 w-full"
-              value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
-            />
+            <input type="date" className="input mt-1 w-full" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
           </div>
-          <div className="lg:col-span-2 flex items-end">
-            <label className="flex items-center gap-2 text-xs font-medium text-gray-800 cursor-pointer pb-2">
-              <input
-                type="checkbox"
-                checked={applyGst}
-                onChange={(e) => setApplyGst(e.target.checked)}
-                className="rounded border-gray-300"
-              />
+          <div className="col-span-2 lg:col-span-3 flex items-end gap-2 pb-0.5">
+            <label className="flex items-center gap-1.5 text-xs font-medium cursor-pointer">
+              <input type="checkbox" checked={applyGst} onChange={(e) => setApplyGst(e.target.checked)} />
               GST
             </label>
             {applyGst && (
@@ -499,8 +651,7 @@ export function InvoiceCreateModal({
                 min={0}
                 max={100}
                 step="0.01"
-                title="GST %"
-                className="input ml-2 w-16 py-1 text-xs"
+                className="input w-20 py-1 text-xs"
                 value={gstPercent}
                 onChange={(e) => setGstPercent(e.target.value)}
               />
@@ -509,164 +660,137 @@ export function InvoiceCreateModal({
         </div>
 
         {selectedCustomer && (
-          <p className="text-xs text-gray-600 -mt-1">
-            <span className="font-semibold text-gray-800">Bill to:</span> M/s {selectedCustomer.name}
-            {selectedCustomer.gstNumber && (
-              <span className="text-gray-500"> · GSTIN {selectedCustomer.gstNumber}</span>
-            )}
+          <p className="text-xs text-gray-600">
+            <span className="font-semibold">Bill to:</span> {selectedCustomer.name}
+            {selectedCustomer.gstNumber && <span className="text-gray-500"> · {selectedCustomer.gstNumber}</span>}
           </p>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
-          {/* Add items — compact */}
-          <div className="lg:col-span-2 rounded-lg border border-gray-200 bg-gray-50/50 p-2.5 space-y-2">
-            <label className="text-xs font-semibold text-gray-800">Add items</label>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+          <div className="rounded-lg border border-gray-200 p-2.5 space-y-2 bg-gray-50/40">
+            <div className="text-xs font-semibold">Add SKU items</div>
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 value={itemSearch}
                 onChange={(e) => setItemSearch(e.target.value)}
-                placeholder="Search name or code…"
+                placeholder="Search…"
                 className="input w-full pl-8 py-1.5 text-xs"
               />
             </div>
-            <div className="h-36 rounded-md border border-gray-200 bg-white overflow-y-auto">
-              {filteredSkuOptions.length === 0 ? (
-                <p className="px-3 py-6 text-center text-xs text-gray-400">No items found</p>
-              ) : (
-                <ul>
-                  {filteredSkuOptions.map((sku) => {
-                    const checked = pickerSelected.has(sku.id)
-                    const onLine = lines.find((l) => l.skuId === sku.id)
-                    return (
-                      <li
-                        key={sku.id}
-                        className={`border-b border-gray-50 last:border-0 ${
-                          checked ? 'bg-blue-50/80' : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 px-2 py-1.5">
-                          <input
-                            type="checkbox"
-                            className="rounded border-gray-300 text-blue-600 shrink-0"
-                            checked={checked}
-                            onChange={() => togglePickerSku(sku.id)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium text-gray-900 truncate">{sku.name}</div>
-                            <div className="text-[10px] text-gray-500">
-                              {formatInr(parseDecimal(sku.price))}/{sku.unit}
-                              {onLine ? ` · on invoice: ${onLine.quantity}` : ''}
-                            </div>
-                          </div>
-                          {checked && (
-                            <input
-                              type="number"
-                              min={1}
-                              className="w-12 py-0.5 px-1 text-xs text-center border border-gray-300 rounded"
-                              value={pickerQty[sku.id] >= 1 ? pickerQty[sku.id] : ''}
-                              onChange={(e) => setPickerSkuQty(sku.id, e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label={`Quantity for ${sku.name}`}
-                            />
-                          )}
+            <div className="h-32 border border-gray-200 rounded-md bg-white overflow-y-auto">
+              <ul>
+                {filteredSkuOptions.map((sku) => (
+                  <li key={sku.id} className={`border-b border-gray-50 ${pickerSelected.has(sku.id) ? 'bg-blue-50' : ''}`}>
+                    <div className="flex items-center gap-2 px-2 py-1.5">
+                      <input
+                        type="checkbox"
+                        checked={pickerSelected.has(sku.id)}
+                        onChange={() => togglePickerSku(sku.id)}
+                        className="rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate">{sku.name}</div>
+                        <div className="text-[10px] text-gray-500">
+                          {formatInr(parseDecimal(sku.price))}/{sku.unit}
                         </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
+                      </div>
+                      {pickerSelected.has(sku.id) && (
+                        <input
+                          type="number"
+                          min={1}
+                          className="w-11 py-0.5 text-xs text-center border rounded"
+                          value={pickerQty[sku.id] || ''}
+                          onChange={(e) =>
+                            setPickerQty((q) => ({
+                              ...q,
+                              [sku.id]: Math.max(0, parseInt(e.target.value, 10) || 0),
+                            }))
+                          }
+                        />
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
             <button
               type="button"
-              onClick={addSelectedFromPicker}
               disabled={!pickerReady}
-              className="w-full py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg disabled:opacity-50 flex items-center justify-center gap-1"
+              onClick={addSelectedFromPicker}
+              className="w-full py-1.5 text-xs bg-blue-600 text-white rounded-lg disabled:opacity-50 flex items-center justify-center gap-1"
             >
-              <Plus className="w-3.5 h-3.5" />
-              Add to invoice
-              {pickerSelected.size > 0 ? ` (${pickerSelected.size})` : ''}
+              <Plus className="w-3.5 h-3.5" /> Add SKU lines
             </button>
           </div>
 
-          {/* Line items */}
-          <div className="lg:col-span-3 rounded-lg border border-gray-200 overflow-hidden flex flex-col min-h-[12rem]">
-            <div className="px-2.5 py-1.5 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-800">
-              Line items ({lines.length})
+          <div className="xl:col-span-2 rounded-lg border border-gray-200 p-2.5 space-y-2 bg-amber-50/30">
+            <div className="text-xs font-semibold">Add custom item (not in SKU list)</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+              <input
+                placeholder="Item name *"
+                className="input text-xs col-span-2"
+                value={customDraft.itemName}
+                onChange={(e) => setCustomDraft((d) => ({ ...d, itemName: e.target.value }))}
+              />
+              <input
+                placeholder="Unit *"
+                className="input text-xs"
+                value={customDraft.unit}
+                onChange={(e) => setCustomDraft((d) => ({ ...d, unit: e.target.value }))}
+              />
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="Price *"
+                className="input text-xs"
+                value={customDraft.pricePerUnit}
+                onChange={(e) => setCustomDraft((d) => ({ ...d, pricePerUnit: e.target.value }))}
+              />
+              <input
+                type="number"
+                min={1}
+                placeholder="Qty *"
+                className="input text-xs"
+                value={customDraft.quantity}
+                onChange={(e) => setCustomDraft((d) => ({ ...d, quantity: e.target.value }))}
+              />
+              <select
+                className="input text-xs"
+                value={customDraft.discountType}
+                onChange={(e) =>
+                  setCustomDraft((d) => ({ ...d, discountType: e.target.value as DiscountType }))
+                }
+              >
+                <option value="none">No disc.</option>
+                <option value="amount">Disc ₹</option>
+                <option value="percent">Disc %</option>
+              </select>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="Disc val"
+                disabled={customDraft.discountType === 'none'}
+                className="input text-xs disabled:bg-gray-50"
+                value={customDraft.discountValue}
+                onChange={(e) => setCustomDraft((d) => ({ ...d, discountValue: e.target.value }))}
+              />
             </div>
-            <div className="flex-1 overflow-auto max-h-52">
-              <table className="w-full text-xs">
-                <thead className="bg-white sticky top-0 z-10 shadow-[0_1px_0_0_#e5e7eb]">
-                  <tr>
-                    <th className="text-left p-1.5 w-8">#</th>
-                    <th className="text-left p-1.5">Item</th>
-                    <th className="text-center p-1.5 w-14">Qty</th>
-                    <th className="text-right p-1.5">Amount</th>
-                    <th className="w-8" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-gray-400">
-                        Add items from the list
-                      </td>
-                    </tr>
-                  ) : (
-                    lines.map((l, i) => {
-                      const calc = lineCalcs[i]
-                      return (
-                        <tr key={l.skuId} className="border-t border-gray-100">
-                          <td className="p-1.5 text-gray-500">{i + 1}</td>
-                          <td className="p-1.5 font-medium truncate max-w-[140px]" title={l.sku.name}>
-                            {l.sku.name}
-                          </td>
-                          <td className="p-1.5">
-                            <input
-                              type="number"
-                              min={1}
-                              className="w-full py-0.5 px-1 text-xs text-center border border-gray-200 rounded"
-                              value={l.quantity}
-                              onChange={(e) => updateLineQty(l.skuId, e.target.value)}
-                            />
-                          </td>
-                          <td className="p-1.5 text-right font-medium whitespace-nowrap">
-                            {formatInr(calc.lineTotal)}
-                          </td>
-                          <td className="p-1.5">
-                            <button
-                              type="button"
-                              onClick={() => removeLine(l.skuId)}
-                              className="text-red-500 hover:bg-red-50 p-0.5 rounded"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <button
+              type="button"
+              onClick={addCustomLine}
+              className="py-1.5 px-3 text-xs border border-amber-300 bg-white rounded-lg hover:bg-amber-50"
+            >
+              Add custom line
+            </button>
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <div className="w-36">
-            <label className="text-xs font-medium text-gray-700">Received (₹)</label>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              className="input mt-1 w-full"
-              value={receivedAmount}
-              onChange={(e) => {
-                setReceivedEdited(true)
-                setReceivedAmount(e.target.value)
-              }}
-            />
-          </div>
+        <div>
+          <div className="text-xs font-semibold mb-1.5">Line items ({lines.length})</div>
+          {lineTable(false)}
         </div>
       </div>
     </InvoiceModalShell>

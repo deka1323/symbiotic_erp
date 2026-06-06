@@ -5,34 +5,32 @@ import { formatInr } from '@/lib/sales/formatCurrency'
 import { amountInWords } from '@/lib/sales/numberToWords'
 import { formatInvoiceDate } from '@/lib/sales/mapInvoice'
 import { buildTaxSummary } from '@/lib/sales/gstCalculations'
-import { planInvoicePages, splitItemName } from '@/lib/sales/invoicePrintLayout'
+import { displayItemName, planInvoicePages } from '@/lib/sales/invoicePrintLayout'
 import type { InvoiceBasicsDto, InvoiceLineDto, SalesInvoiceDto } from '@/lib/sales/invoiceTypes'
 import type { InvoicePagePlan } from '@/lib/sales/invoicePrintLayout'
 
 function MoneyStack({ amount, pct = 0 }: { amount: number; pct?: number }) {
+  if (amount <= 0 && pct <= 0) {
+    return <span className="stack-zero">—</span>
+  }
   return (
     <div className="stack">
       <div>{formatInr(amount)}</div>
-      <div className="sub">({pct}%)</div>
+      {pct > 0 && <div className="sub">({pct}%)</div>}
     </div>
   )
 }
 
-/** B2B-style bordered grid header — same on every page */
 function InvoiceFixedHeader({
   basics,
   invoice,
   invoiceNumber,
   dateLabel,
-  pageNumber,
-  totalPages,
 }: {
   basics: InvoiceBasicsDto
   invoice: SalesInvoiceDto
   invoiceNumber: number
   dateLabel: string
-  pageNumber: number
-  totalPages: number
 }) {
   const companyDisplay = basics.companyName.trim().toUpperCase()
 
@@ -66,12 +64,12 @@ function InvoiceFixedHeader({
               </div>
             </td>
             <td className="inv-ht-meta-compact">
-              <div className="inv-ht-meta-stack">
-                <div className="inv-ht-meta-item">
+              <div className="inv-ht-meta-lines">
+                <div className="inv-ht-meta-line">
                   <span className="inv-ht-meta-lbl">Invoice No.</span>
                   <span className="inv-ht-meta-val">{invoiceNumber}</span>
                 </div>
-                <div className="inv-ht-meta-item">
+                <div className="inv-ht-meta-line">
                   <span className="inv-ht-meta-lbl">Date</span>
                   <span className="inv-ht-meta-val">{dateLabel}</span>
                 </div>
@@ -81,7 +79,7 @@ function InvoiceFixedHeader({
           <tr>
             <td colSpan={2} className="inv-ht-bill-cell">
               <div className="inv-ht-inline-lbl">Bill To</div>
-              <div className="inv-ht-cust-name">M/s {invoice.customerName}</div>
+              <div className="inv-ht-cust-name">{invoice.customerName}</div>
               <div className="inv-ht-bill-detail">
                 {invoice.customerAddress && <div>{invoice.customerAddress}</div>}
                 {invoice.customerGst && <div>GSTIN: {invoice.customerGst}</div>}
@@ -91,11 +89,6 @@ function InvoiceFixedHeader({
           </tr>
         </tbody>
       </table>
-      {totalPages > 1 && (
-        <div className="inv-page-pill">
-          Page {pageNumber} of {totalPages}
-        </div>
-      )}
     </header>
   )
 }
@@ -105,30 +98,31 @@ function ItemsTableSection({
   showTotal,
   totalQty,
   totalAmount,
+  totalDiscount,
+  totalGst,
   applyGst,
 }: {
   lines: InvoiceLineDto[]
   showTotal: boolean
   totalQty: number
   totalAmount: number
+  totalDiscount: number
+  totalGst: number
   applyGst: boolean
 }) {
-  const totalGst = lines.reduce((s, l) => s + l.gstAmount, 0)
   return (
     <div className="inv-table-wrap">
       <table className="inv-table">
         <colgroup>
           <col style={{ width: '4%' }} />
-          <col style={{ width: '23%' }} />
+          <col style={{ width: '28%' }} />
+          <col style={{ width: '8%' }} />
           <col style={{ width: '7%' }} />
-          <col style={{ width: '9%' }} />
-          <col style={{ width: '5%' }} />
           <col style={{ width: '7%' }} />
-          <col style={{ width: '6%' }} />
-          <col style={{ width: '9%' }} />
-          <col style={{ width: '10%' }} />
-          <col style={{ width: '9%' }} />
           <col style={{ width: '11%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '11%' }} />
+          <col style={{ width: '12%' }} />
         </colgroup>
         <thead>
           <tr>
@@ -139,8 +133,6 @@ function ItemsTableSection({
               <br />
               SAC
             </th>
-            <th>MRP</th>
-            <th>Size</th>
             <th>Qty</th>
             <th>Unit</th>
             <th>
@@ -155,22 +147,20 @@ function ItemsTableSection({
         </thead>
         <tbody>
           {lines.map((line) => {
-            const { title, subtitle } = splitItemName(line.itemName)
+            const discPct =
+              line.discountType === 'percent' ? line.discountValue : 0
             return (
               <tr key={line.id}>
                 <td className="tc">{line.lineNo}</td>
                 <td className="tl">
-                  <div className="it-title">{title}</div>
-                  {subtitle && <div className="it-sub">{subtitle}</div>}
+                  <div className="it-title">{displayItemName(line.itemName)}</div>
                 </td>
-                <td className="tc">&nbsp;</td>
-                <td className="tr">{formatInr(line.mrp)}</td>
                 <td className="tc">&nbsp;</td>
                 <td className="tc">{line.quantity}</td>
                 <td className="tc">{line.unit}</td>
                 <td className="tr">{formatInr(line.pricePerUnit)}</td>
                 <td className="tr">
-                  <MoneyStack amount={0} pct={0} />
+                  <MoneyStack amount={line.discountAmount} pct={discPct} />
                 </td>
                 <td className="tr">
                   <MoneyStack amount={line.gstAmount} pct={applyGst ? line.gstPercent : 0} />
@@ -183,12 +173,13 @@ function ItemsTableSection({
         {showTotal && (
           <tfoot>
             <tr>
-              <td colSpan={5} className="total-lbl">
+              <td colSpan={3} className="total-lbl">
                 Total
               </td>
               <td className="tc">{totalQty}</td>
-              <td colSpan={2}>&nbsp;</td>
-              <td className="tr">{formatInr(0)}</td>
+              <td>&nbsp;</td>
+              <td>&nbsp;</td>
+              <td className="tr">{formatInr(totalDiscount)}</td>
               <td className="tr">{formatInr(totalGst)}</td>
               <td className="tr">{formatInr(totalAmount)}</td>
             </tr>
@@ -235,7 +226,7 @@ function AmountsSummary({ invoice }: { invoice: SalesInvoiceDto }) {
 
 function TaxTable({ invoice }: { invoice: SalesInvoiceDto }) {
   const taxRows = invoice.lines.map((l) => ({
-    taxableAmount: l.mrp * l.quantity,
+    taxableAmount: l.taxableAmount,
     gstAmount: l.gstAmount,
   }))
   const tax = buildTaxSummary(taxRows, invoice.gstPercent, invoice.applyGst)
@@ -283,14 +274,7 @@ function TaxTable({ invoice }: { invoice: SalesInvoiceDto }) {
   )
 }
 
-/** B2B demo: one row, three bordered cells — Bank | Terms | Signatory (+ QR in bank cell) */
-function ClosingFooterRow({
-  basics,
-  terms,
-}: {
-  basics: InvoiceBasicsDto
-  terms: string
-}) {
+function ClosingFooterRow({ basics, terms }: { basics: InvoiceBasicsDto; terms: string }) {
   const companyDisplay = basics.companyName.trim().toUpperCase()
 
   return (
@@ -335,6 +319,8 @@ function InvoicePageBody({
   invoice,
   basics,
   totalQty,
+  totalDiscount,
+  totalGst,
   balance,
   terms,
 }: {
@@ -342,6 +328,8 @@ function InvoicePageBody({
   invoice: SalesInvoiceDto
   basics: InvoiceBasicsDto
   totalQty: number
+  totalDiscount: number
+  totalGst: number
   balance: number
   terms: string
 }) {
@@ -353,6 +341,8 @@ function InvoicePageBody({
           showTotal={plan.showItemsTotal}
           totalQty={totalQty}
           totalAmount={invoice.totalAmount}
+          totalDiscount={totalDiscount}
+          totalGst={totalGst}
           applyGst={invoice.applyGst}
         />
       )}
@@ -386,6 +376,8 @@ export function InvoicePrintView({ invoice }: { invoice: SalesInvoiceDto }) {
   const dateLabel = formatInvoiceDate(invoice.invoiceDate)
   const balance = invoice.totalAmount - invoice.receivedAmount
   const totalQty = invoice.lines.reduce((s, l) => s + l.quantity, 0)
+  const totalDiscount = invoice.lines.reduce((s, l) => s + l.discountAmount, 0)
+  const totalGst = invoice.lines.reduce((s, l) => s + l.gstAmount, 0)
   const terms = basics.termsAndConditions || 'Thank You for doing business with us!'
   const pages = planInvoicePages(invoice.lines)
 
@@ -399,17 +391,22 @@ export function InvoicePrintView({ invoice }: { invoice: SalesInvoiceDto }) {
               invoice={invoice}
               invoiceNumber={invoice.invoiceNumber}
               dateLabel={dateLabel}
-              pageNumber={plan.pageNumber}
-              totalPages={plan.totalPages}
             />
             <InvoicePageBody
               plan={plan}
               invoice={invoice}
               basics={basics}
               totalQty={totalQty}
+              totalDiscount={totalDiscount}
+              totalGst={totalGst}
               balance={balance}
               terms={terms}
             />
+            {plan.totalPages > 1 && (
+              <div className="inv-page-pill-bottom">
+                Page {plan.pageNumber} of {plan.totalPages}
+              </div>
+            )}
           </div>
         </div>
       ))}

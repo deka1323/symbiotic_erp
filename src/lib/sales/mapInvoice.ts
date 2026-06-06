@@ -1,20 +1,36 @@
 import { parseDecimal } from './formatCurrency'
 import { getPublicUploadUrl, isStoredAssetPath } from '@/lib/uploads/publicUrl'
-import type { InvoiceBasicsDto, InvoiceLineDto, SalesInvoiceDto } from './invoiceTypes'
+import type { DiscountType, InvoiceBasicsDto, InvoiceLineDto, SalesInvoiceDto } from './invoiceTypes'
+
+function mapDiscountType(v: unknown): DiscountType {
+  if (v === 'amount' || v === 'percent') return v
+  return 'none'
+}
 
 export function mapInvoiceLine(line: Record<string, unknown>): InvoiceLineDto {
+  const price = parseDecimal(line.pricePerUnit)
+  const discountAmount = parseDecimal(line.discountAmount)
+  const qty = Number(line.quantity)
+  const taxableAmount = parseDecimal(
+    line.taxableAmount ?? Math.max(0, price * qty - discountAmount)
+  )
+
   return {
     id: String(line.id),
-    skuId: String(line.skuId),
+    skuId: line.skuId != null ? String(line.skuId) : null,
     lineNo: Number(line.lineNo),
     itemName: String(line.itemName),
     mrp: parseDecimal(line.mrp),
-    quantity: Number(line.quantity),
+    quantity: qty,
     unit: String(line.unit),
-    pricePerUnit: parseDecimal(line.pricePerUnit),
+    pricePerUnit: price,
     lineTotal: parseDecimal(line.lineTotal),
+    discountType: mapDiscountType(line.discountType),
+    discountValue: parseDecimal(line.discountValue),
+    discountAmount,
     gstPercent: parseDecimal(line.gstPercent),
     gstAmount: parseDecimal(line.gstAmount),
+    taxableAmount,
   }
 }
 
