@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { authorize } from '@/lib/middleware/auth'
+import { parseQuantityFromDb, roundQuantity } from '@/lib/inventory/quantity'
 import { prisma } from '@/lib/prisma'
 
 const roItemSchema = z.object({
   skuId: z.string().uuid(),
-  quantity: z.number().int().min(0),
+  quantity: z.number().positive().transform(roundQuantity),
 })
 
 const createFromTOSchema = z.object({
@@ -220,8 +221,8 @@ export async function POST(req: NextRequest) {
             },
           })
 
-          const oldQuantity = existingStock?.quantity || 0
-          const newQuantity = oldQuantity + item.quantity
+          const oldQuantity = parseQuantityFromDb(existingStock?.quantity)
+          const newQuantity = roundQuantity(oldQuantity + item.quantity)
 
           await tx.stock.upsert({
             where: {
@@ -310,8 +311,8 @@ export async function POST(req: NextRequest) {
             },
           })
 
-          const oldQty = existingStock?.quantity || 0
-          const newQty = oldQty + item.quantity
+          const oldQty = parseQuantityFromDb(existingStock?.quantity)
+          const newQty = roundQuantity(oldQty + item.quantity)
 
           await tx.stock.upsert({
             where: {

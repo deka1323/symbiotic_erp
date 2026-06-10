@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { authorize } from '@/lib/middleware/auth'
+import { parseQuantityFromDb, roundQuantity } from '@/lib/inventory/quantity'
 import { prisma } from '@/lib/prisma'
 
 const editStockSchema = z.object({
@@ -89,7 +90,7 @@ export async function PUT(req: NextRequest) {
         },
       })
 
-      const oldQuantity = existing?.quantity ?? 0
+      const oldQuantity = parseQuantityFromDb(existing?.quantity)
 
       const stock = await tx.stock.upsert({
         where: {
@@ -161,8 +162,8 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      const oldQuantity = existing?.quantity ?? 0
-      const newQuantity = oldQuantity - validated.quantity
+      const oldQuantity = parseQuantityFromDb(existing?.quantity)
+      const newQuantity = roundQuantity(oldQuantity - validated.quantity)
 
       const stock = await tx.stock.upsert({
         where: {

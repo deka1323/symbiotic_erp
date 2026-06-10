@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X, Plus, Trash2, ScanLine } from 'lucide-react'
 import { authFetch } from '@/lib/fetch'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
+import { PositiveDecimalInput, parsePositiveDecimal } from '@/components/ui/PositiveIntegerInput'
+import { formatQuantity } from '@/lib/inventory/quantity'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { formatSiteDateAndTime } from '@/lib/dates'
 
@@ -98,10 +99,10 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
     setItems((prev) => {
       const idx = prev.findIndex((x) => x.skuId === sku.id)
       if (idx >= 0) {
-        const currentQty = parsePositiveInteger(prev[idx].quantity) ?? 0
+        const currentQty = parsePositiveDecimal(prev[idx].quantity) ?? 0
         return prev.map((row, i) => (i === idx ? { ...row, quantity: String(currentQty + 1) } : row))
       }
-      const cleanRows = prev.filter((r) => r.skuId || (parsePositiveInteger(r.quantity) ?? 0) > 0)
+      const cleanRows = prev.filter((r) => r.skuId || (parsePositiveDecimal(r.quantity) ?? 0) > 0)
       return [...cleanRows, { skuId: sku.id, quantity: '1' }]
     })
     setScanFeedback(`Added ${sku.name} (${sku.code})`)
@@ -156,8 +157,8 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
   const payloadItems = useMemo(
     () =>
       items
-        .filter((x) => x.skuId && (parsePositiveInteger(x.quantity) ?? 0) > 0)
-        .map((x) => ({ skuId: x.skuId, quantity: parsePositiveInteger(x.quantity) ?? 0 })),
+        .filter((x) => x.skuId && (parsePositiveDecimal(x.quantity) ?? 0) > 0)
+        .map((x) => ({ skuId: x.skuId, quantity: parsePositiveDecimal(x.quantity) ?? 0 })),
     [items]
   )
 
@@ -217,7 +218,7 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
             <div><strong>Items:</strong></div>
             <ul className="list-disc list-inside">
               {(to.toItems || []).map((it: any) => (
-                <li key={it.id}>{it?.sku?.name || it.skuId}: {it.sentQuantity}</li>
+                <li key={it.id}>{it?.sku?.name || it.skuId}: {formatQuantity(it.sentQuantity)}</li>
               ))}
             </ul>
           </div>
@@ -306,7 +307,7 @@ export function TransferOrderModal({ mode, fromInventory, po, to, onClose, onCre
                 return (
                   <div key={idx} className="flex items-center gap-2">
                     <SearchableSelect value={row.skuId} onChange={(v) => updateRow(idx, { skuId: v })} placeholder="SKU" options={skuOptions} className={`flex-1 ${scanMode ? 'pointer-events-none opacity-70' : ''}`} menuPortal />
-                    <PositiveIntegerInput value={row.quantity} onChange={(v) => updateRow(idx, { quantity: v })} disabled={scanMode} className="w-24 px-2 py-1 text-xs border rounded disabled:bg-gray-100 disabled:text-gray-500" />
+                    <PositiveDecimalInput value={row.quantity} onChange={(v) => updateRow(idx, { quantity: v })} disabled={scanMode} className="w-24 px-2 py-1 text-xs border rounded disabled:bg-gray-100 disabled:text-gray-500" />
                     <button type="button" onClick={() => removeRow(idx)} disabled={scanMode} className="p-1 text-red-600 disabled:text-gray-400"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 )

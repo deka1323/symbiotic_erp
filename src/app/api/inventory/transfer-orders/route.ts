@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { authorize } from '@/lib/middleware/auth'
+import { parseQuantityFromDb, roundQuantity } from '@/lib/inventory/quantity'
 import { prisma } from '@/lib/prisma'
 
 const toItemSchema = z.object({
   skuId: z.string().uuid(),
-  quantity: z.number().int().min(1),
+  quantity: z.number().positive().transform(roundQuantity),
 })
 
 const createFromPOSchema = z.object({
@@ -147,8 +148,8 @@ export async function POST(req: NextRequest) {
               },
             },
           })
-          const oldQuantity = stockRow?.quantity ?? 0
-          const newQuantity = oldQuantity - item.quantity
+          const oldQuantity = parseQuantityFromDb(stockRow?.quantity)
+          const newQuantity = roundQuantity(oldQuantity - item.quantity)
 
           await tx.stock.upsert({
             where: {
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
                 skuId: item.skuId,
               },
             },
-            update: { quantity: { decrement: item.quantity } as any },
+            update: { quantity: { decrement: item.quantity } },
             create: {
               inventoryId: sendingInventoryId,
               skuId: item.skuId,
@@ -253,8 +254,8 @@ export async function POST(req: NextRequest) {
               },
             },
           })
-          const oldQuantity = stockRow?.quantity ?? 0
-          const newQuantity = oldQuantity - item.quantity
+          const oldQuantity = parseQuantityFromDb(stockRow?.quantity)
+          const newQuantity = roundQuantity(oldQuantity - item.quantity)
 
           await tx.stock.upsert({
             where: {
@@ -263,7 +264,7 @@ export async function POST(req: NextRequest) {
                 skuId: item.skuId,
               },
             },
-            update: { quantity: { decrement: item.quantity } as any },
+            update: { quantity: { decrement: item.quantity } },
             create: {
               inventoryId: sendingInventoryId,
               skuId: item.skuId,

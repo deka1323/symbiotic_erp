@@ -456,7 +456,7 @@ model Stock {
   id          String   @id @default(uuid())
   inventoryId String   @map("inventory_id")
   skuId       String   @map("sku_id")
-  quantity    Int      @default(0)
+  quantity    Decimal  @default(0) @db.Decimal(14, 3)
   lastUpdated DateTime @default(now()) @updatedAt @map("last_updated")
 
   // Relations
@@ -475,8 +475,8 @@ model StockHistory {
   skuId       String   @map("sku_id")
   batchId     String?  @map("batch_id")
   userId      String   @map("user_id")
-  oldQuantity Int      @map("old_quantity")
-  newQuantity Int      @map("new_quantity")
+  oldQuantity Decimal  @map("old_quantity") @db.Decimal(14, 3)
+  newQuantity Decimal  @map("new_quantity") @db.Decimal(14, 3)
   reason      String   @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -537,7 +537,7 @@ model POItem {
   id                String @id @default(uuid())
   purchaseOrderId   String @map("purchase_order_id")
   skuId             String @map("sku_id")
-  requestedQuantity Int    @map("requested_quantity")
+  requestedQuantity Decimal @map("requested_quantity") @db.Decimal(14, 3)
 
   // Relations
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
@@ -578,8 +578,8 @@ model TOItem {
   id               String @id @default(uuid())
   transferOrderId  String @map("transfer_order_id")
   skuId            String @map("sku_id")
-  sentQuantity     Int    @map("sent_quantity")
-  receivedQuantity Int?   @map("received_quantity")
+  sentQuantity     Decimal  @map("sent_quantity") @db.Decimal(14, 3)
+  receivedQuantity Decimal? @map("received_quantity") @db.Decimal(14, 3)
 
   // Relations
   transferOrder TransferOrder @relation(fields: [transferOrderId], references: [id], onDelete: Cascade)
@@ -616,7 +616,7 @@ model ROItem {
   id               String @id @default(uuid())
   receiveOrderId   String @map("receive_order_id")
   skuId            String @map("sku_id")
-  receivedQuantity Int    @map("received_quantity")
+  receivedQuantity Decimal @map("received_quantity") @db.Decimal(14, 3)
 
   // Relations
   receiveOrder ReceiveOrder @relation(fields: [receiveOrderId], references: [id], onDelete: Cascade)

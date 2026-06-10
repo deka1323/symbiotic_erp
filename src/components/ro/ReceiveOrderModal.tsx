@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
 import { authFetch } from '@/lib/fetch'
-import { PositiveIntegerInput, parsePositiveInteger } from '@/components/ui/PositiveIntegerInput'
+import { PositiveDecimalInput, parsePositiveDecimal } from '@/components/ui/PositiveIntegerInput'
+import { formatQuantity } from '@/lib/inventory/quantity'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
@@ -123,8 +124,8 @@ export function ReceiveOrderModal({
         onError?.('Please provide valid SKU for all items')
         return
       }
-      const qty = parsePositiveInteger(it.quantity)
-      if (qty == null || qty < 1) {
+      const qty = parsePositiveDecimal(it.quantity)
+      if (qty == null) {
         setModalError('Amount can not be zero.')
         onError?.('Amount can not be zero.')
         return
@@ -135,8 +136,8 @@ export function ReceiveOrderModal({
 
   const handleCreate = async () => {
     const payloadItems = items
-      .filter((it) => it.skuId && (parsePositiveInteger(it.quantity) ?? 0) > 0)
-      .map((it) => ({ skuId: it.skuId, quantity: parsePositiveInteger(it.quantity) ?? 0 }))
+      .filter((it) => it.skuId && (parsePositiveDecimal(it.quantity) ?? 0) > 0)
+      .map((it) => ({ skuId: it.skuId, quantity: parsePositiveDecimal(it.quantity) ?? 0 }))
     let payload: any
     if (mode === 'createFromTO') {
       payload = { mode: 'fromTO', transferOrderId: to.id, items: payloadItems }
@@ -183,7 +184,7 @@ export function ReceiveOrderModal({
             <div><strong>RO:</strong> {ro.roNumber}</div>
             <ul className="list-disc list-inside">
               {(ro.roItems || []).map((it: any) => (
-                <li key={it.id}>{it?.sku?.name || it.skuId}: {it.receivedQuantity}</li>
+                <li key={it.id}>{it?.sku?.name || it.skuId}: {formatQuantity(it.receivedQuantity)}</li>
               ))}
             </ul>
           </div>
@@ -275,7 +276,7 @@ export function ReceiveOrderModal({
                         className="flex-1"
                         menuPortal
                       />
-                      <PositiveIntegerInput
+                      <PositiveDecimalInput
                         value={it.quantity}
                         onChange={(v) => updateItem(idx, 'quantity', v)}
                         className="w-24 px-3 py-1.5 text-xs border rounded-lg bg-white"
@@ -302,7 +303,7 @@ export function ReceiveOrderModal({
               isSubmitting ||
               (mode === 'create' && !fromInventoryId) ||
               items.length === 0 ||
-              items.some((it) => !it.skuId || (parsePositiveInteger(it.quantity) ?? 0) < 1)
+              items.some((it) => !it.skuId || parsePositiveDecimal(it.quantity) == null)
             }
             className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -326,9 +327,9 @@ export function ReceiveOrderModal({
           {mode === 'createFromTO' && to && <p><strong>Transfer Order:</strong> {to.toNumber || to.id}</p>}
           <p className="mt-2"><strong>Items:</strong></p>
           <ul className="list-disc list-inside ml-1">
-            {items.filter((it) => it.skuId && (parsePositiveInteger(it.quantity) ?? 0) > 0).map((it, i) => {
+            {items.filter((it) => it.skuId && (parsePositiveDecimal(it.quantity) ?? 0) > 0).map((it, i) => {
               const sku = skus.find((s: any) => s.id === it.skuId)
-              return <li key={i}>{sku?.name || sku?.code || it.skuId || '—'}: {parsePositiveInteger(it.quantity) ?? 0}</li>
+              return <li key={i}>{sku?.name || sku?.code || it.skuId || '—'}: {parsePositiveDecimal(it.quantity) ?? 0}</li>
             })}
           </ul>
         </div>
