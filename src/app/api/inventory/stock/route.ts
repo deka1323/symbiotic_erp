@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
         inventoryId: stock.inventoryId,
         skuId: stock.skuId,
         sku: stock.sku,
-        totalQuantity: stock.quantity,
+        totalQuantity: parseQuantityFromDb(stock.quantity),
       })),
     })
   } catch (error) {

@@ -9,6 +9,7 @@ import { authFetch } from '@/lib/fetch'
 import { PositiveIntegerInput, parseNonNegativeInteger, parseSignedStockInteger } from '@/components/ui/PositiveIntegerInput'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatSiteDateAndTime, formatSiteNumber } from '@/lib/dates'
+import { formatQuantity, parseQuantityFromDb } from '@/lib/inventory/quantity'
 
 export default function ManageStockPage() {
   const { selectedInventory } = useInventoryContext()
@@ -372,7 +373,7 @@ export default function ManageStockPage() {
     }
 
     const stockItem = stocks.find((s) => s.skuId === addSkuId)
-    const currentQty = Number(stockItem?.totalQuantity || 0)
+    const currentQty = parseQuantityFromDb(stockItem?.totalQuantity)
     const newQty = currentQty + qty
 
     setIsAddingStock(true)
@@ -417,10 +418,10 @@ export default function ManageStockPage() {
       render: (r) => (
         <span
           className={`text-xs font-semibold tabular-nums ${
-            Number(r.totalQuantity) < 0 ? 'text-rose-600' : 'text-gray-900'
+            parseQuantityFromDb(r.totalQuantity) < 0 ? 'text-rose-600' : 'text-gray-900'
           }`}
         >
-          {r.totalQuantity}
+          {formatQuantity(r.totalQuantity)}
         </span>
       ),
     },
@@ -431,14 +432,14 @@ export default function ManageStockPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => openEdit(r.skuId, r.totalQuantity)}
+            onClick={() => openEdit(r.skuId, parseQuantityFromDb(r.totalQuantity))}
             className="text-blue-600 hover:text-blue-700 text-xs underline"
           >
             Edit
           </button>
           <button
             type="button"
-            onClick={() => openConsumption(r.skuId, r.totalQuantity)}
+            onClick={() => openConsumption(r.skuId, parseQuantityFromDb(r.totalQuantity))}
             className="text-rose-600 hover:text-rose-700 text-xs underline"
           >
             Consumption
@@ -470,14 +471,14 @@ export default function ManageStockPage() {
       key: 'oldQuantity',
       header: 'Old Quantity',
       render: (r) => (
-        <div className="text-xs text-gray-700">{r.oldQuantity}</div>
+        <div className="text-xs text-gray-700">{formatQuantity(r.oldQuantity)}</div>
       ),
     },
     {
       key: 'newQuantity',
       header: 'New Quantity',
       render: (r) => (
-        <div className="text-xs font-semibold text-gray-900">{r.newQuantity}</div>
+        <div className="text-xs font-semibold text-gray-900">{formatQuantity(r.newQuantity)}</div>
       ),
     },
     {
@@ -523,10 +524,14 @@ export default function ManageStockPage() {
     {
       key: 'consumedQty',
       header: 'Consumed Qty',
-      render: (r) => <div className="text-xs font-semibold text-rose-700">{Math.max(0, (r.oldQuantity || 0) - (r.newQuantity || 0))}</div>,
+      render: (r) => (
+        <div className="text-xs font-semibold text-rose-700">
+          {formatQuantity(Math.max(0, parseQuantityFromDb(r.oldQuantity) - parseQuantityFromDb(r.newQuantity)))}
+        </div>
+      ),
     },
-    { key: 'oldQuantity', header: 'Before', render: (r) => <div className="text-xs text-gray-700">{r.oldQuantity}</div> },
-    { key: 'newQuantity', header: 'After', render: (r) => <div className="text-xs font-semibold text-gray-900">{r.newQuantity}</div> },
+    { key: 'oldQuantity', header: 'Before', render: (r) => <div className="text-xs text-gray-700">{formatQuantity(r.oldQuantity)}</div> },
+    { key: 'newQuantity', header: 'After', render: (r) => <div className="text-xs font-semibold text-gray-900">{formatQuantity(r.newQuantity)}</div> },
     {
       key: 'reason',
       header: 'Reason',
@@ -684,7 +689,7 @@ export default function ManageStockPage() {
             </div>
             <div className="text-right">
               <p className="text-2xl font-bold tabular-nums text-gray-900">
-                {formatSiteNumber(stocks.reduce((sum, s) => sum + (s.totalQuantity || 0), 0))}
+                {formatSiteNumber(stocks.reduce((sum, s) => sum + parseQuantityFromDb(s.totalQuantity), 0))}
               </p>
               <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">units</p>
             </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authorize } from '@/lib/middleware/auth'
+import { parseQuantityFromDb } from '@/lib/inventory/quantity'
 import { prisma } from '@/lib/prisma'
 
 // GET /api/inventory/stock/history - list stock history entries
@@ -57,7 +58,14 @@ export async function GET(req: NextRequest) {
       prisma.stockHistory.count({ where }),
     ])
 
-    return NextResponse.json({ data: history, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } })
+    return NextResponse.json({
+      data: history.map((row) => ({
+        ...row,
+        oldQuantity: parseQuantityFromDb(row.oldQuantity),
+        newQuantity: parseQuantityFromDb(row.newQuantity),
+      })),
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+    })
   } catch (error) {
     console.error('Get stock history error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
