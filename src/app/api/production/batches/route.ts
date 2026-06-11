@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { authorize } from '@/lib/middleware/auth'
+import { parseQuantityFromDb, roundQuantity } from '@/lib/inventory/quantity'
 import { prisma } from '@/lib/prisma'
 import {
   formatProductionBatchCode,
@@ -150,8 +151,8 @@ export async function POST(req: NextRequest) {
           },
         })
 
-        const oldQuantity = existingStock?.quantity ?? 0
-        const newQuantity = oldQuantity + item.quantity
+        const oldQuantity = parseQuantityFromDb(existingStock?.quantity)
+        const newQuantity = roundQuantity(oldQuantity + item.quantity)
 
         await tx.stock.upsert({
           where: {
