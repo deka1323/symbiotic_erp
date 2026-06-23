@@ -668,6 +668,7 @@ enum PaymentMode {
   UPI
   CARD
   BANK_TRANSFER
+  PART
 }
 
 enum BillLineType {

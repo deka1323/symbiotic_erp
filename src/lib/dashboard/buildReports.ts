@@ -8,6 +8,7 @@ import {
   istDayUtcRange,
   lastNDaysLabels,
 } from '@/lib/dashboard/dates'
+import { fetchPosBillTotalsInRange, fetchPosBillsInRange } from '@/lib/dashboard/posBills'
 import type { DashboardReports } from '@/lib/dashboard/types'
 
 function money(n: number): number {
@@ -193,25 +194,14 @@ export async function buildDashboardReports(opts: {
       orderBy: { createdAt: 'desc' },
     }),
     posIds.length
-      ? prisma.bill.findMany({
-          where: {
-            posId: { in: posIds },
-            status: 'FINALIZED',
-            finalizedAt: { gte: istDayUtcRange(dateFrom).start, lte: istDayUtcRange(dateTo).end },
-          },
-          include: { pos: { select: { name: true } } },
-          orderBy: { finalizedAt: 'desc' },
-        })
+      ? fetchPosBillsInRange(
+          posIds,
+          istDayUtcRange(dateFrom).start,
+          istDayUtcRange(dateTo).end
+        )
       : Promise.resolve([]),
     posIds.length
-      ? prisma.bill.findMany({
-          where: {
-            posId: { in: posIds },
-            status: 'FINALIZED',
-            finalizedAt: { gte: todayStart, lte: todayEnd },
-          },
-          select: { grandTotal: true },
-        })
+      ? fetchPosBillTotalsInRange(posIds, todayStart, todayEnd)
       : Promise.resolve([]),
     prisma.salesInvoice.findMany({
       where: {
@@ -225,17 +215,11 @@ export async function buildDashboardReports(opts: {
       select: { invoiceDate: true, totalAmount: true },
     }),
     posIds.length
-      ? prisma.bill.findMany({
-          where: {
-            posId: { in: posIds },
-            status: 'FINALIZED',
-            finalizedAt: {
-              gte: istDayUtcRange(addDays(today, -6)).start,
-              lte: todayEnd,
-            },
-          },
-          select: { finalizedAt: true, grandTotal: true },
-        })
+      ? fetchPosBillTotalsInRange(
+          posIds,
+          istDayUtcRange(addDays(today, -6)).start,
+          todayEnd
+        )
       : Promise.resolve([]),
     prisma.batch.findMany({
       where: {
@@ -360,8 +344,8 @@ export async function buildDashboardReports(opts: {
   const posTrendMap = new Map<string, number>()
   for (const bill of trendPosBills) {
     if (!bill.finalizedAt) continue
-    const d = istDateString(bill.finalizedAt)
-    posTrendMap.set(d, money((posTrendMap.get(d) || 0) + parseDecimal(bill.grandTotal)))
+    const d = istDateString(new Date(bill.finalizedAt))
+    posTrendMap.set(d, money((posTrendMap.get(d) || 0) + bill.grandTotal))
   }
   const salesTrend = lastNDaysLabels(7).map(({ date, label }) => ({
     date,
@@ -387,9 +371,7 @@ export async function buildDashboardReports(opts: {
         invoicesToday.reduce((s, i) => s + parseDecimal(i.totalAmount), 0)
       ),
       todayInvoiceCount: invoicesToday.length,
-      todayPosValue: money(
-        posBillsToday.reduce((s, b) => s + parseDecimal(b.grandTotal), 0)
-      ),
+      todayPosValue: money(posBillsToday.reduce((s, b) => s + b.grandTotal, 0)),
       todayPosCount: posBillsToday.length,
       openPoCount: openPos.length,
       inTransitToCount: inTransitTos.length,
@@ -435,11 +417,11 @@ export async function buildDashboardReports(opts: {
     posBills: posBillsInRange.map((b) => ({
       id: b.id,
       billNumber: b.billNumber,
-      posName: b.pos.name,
+      posName: b.posName,
       billType: b.billType,
-      paymentMode: b.paymentMode || '—',
-      grandTotal: parseDecimal(b.grandTotal),
-      finalizedAt: b.finalizedAt?.toISOString() || '',
+      paymentMode: b.paymentMode,
+      grandTotal: b.grandTotal,
+      finalizedAt: b.finalizedAt,
     })),
   }
 }
