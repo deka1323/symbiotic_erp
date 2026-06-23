@@ -19,7 +19,7 @@ import { authFetch } from '@/lib/fetch'
 import { formatInr } from '@/lib/sales/formatCurrency'
 import { formatSiteDate, formatSiteDateAndTime } from '@/lib/dates'
 import { formatQuantity } from '@/lib/inventory/quantity'
-import type { DashboardReports } from '@/lib/dashboard/types'
+import type { DashboardReports, StockRow } from '@/lib/dashboard/types'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { MiniBarChart, MiniLineBars } from '@/components/dashboard/MiniBarChart'
 import { ReportTable, type ReportColumn } from '@/components/dashboard/ReportTable'
@@ -190,7 +190,8 @@ export function DashboardHome() {
     },
   ]
 
-  const lowStock = reports?.stock.filter((s) => s.status === 'low' || s.status === 'negative') || []
+  const lowStock: StockRow[] =
+    reports?.stock.filter((s) => s.status === 'low' || s.status === 'negative') ?? []
 
   if (needsInventory) {
     return (

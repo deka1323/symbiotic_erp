@@ -32,7 +32,7 @@ function downloadCsv(filename: string, headers: string[], rows: (string | number
   URL.revokeObjectURL(url)
 }
 
-export function ReportTable<T extends Record<string, unknown>>({
+export function ReportTable<T extends object>({
   title,
   description,
   columns,
@@ -48,7 +48,7 @@ export function ReportTable<T extends Record<string, unknown>>({
   columns: ReportColumn<T>[]
   data: T[]
   searchPlaceholder?: string
-  searchKeys?: (keyof T & string)[]
+  searchKeys?: string[]
   emptyMessage?: string
   exportFilename?: string
   maxHeight?: string
@@ -63,15 +63,18 @@ export function ReportTable<T extends Record<string, unknown>>({
     if (q) {
       list = list.filter((row) => {
         const keys = searchKeys || columns.map((c) => c.key)
-        return keys.some((k) => String(row[k] ?? '').toLowerCase().includes(q))
+        const rec = row as Record<string, unknown>
+        return keys.some((k) => String(rec[k] ?? '').toLowerCase().includes(q))
       })
     }
     if (sortKey) {
       const col = columns.find((c) => c.key === sortKey)
       if (col) {
         list.sort((a, b) => {
-          const av = col.sortValue ? col.sortValue(a) : (a[sortKey] as string | number) ?? ''
-          const bv = col.sortValue ? col.sortValue(b) : (b[sortKey] as string | number) ?? ''
+          const recA = a as Record<string, unknown>
+          const recB = b as Record<string, unknown>
+          const av = col.sortValue ? col.sortValue(a) : (recA[sortKey] as string | number) ?? ''
+          const bv = col.sortValue ? col.sortValue(b) : (recB[sortKey] as string | number) ?? ''
           const cmp = av < bv ? -1 : av > bv ? 1 : 0
           return sortDir === 'asc' ? cmp : -cmp
         })
@@ -93,7 +96,7 @@ export function ReportTable<T extends Record<string, unknown>>({
     const rows = filtered.map((row) =>
       columns.map((c) => {
         if (c.exportValue) return c.exportValue(row)
-        const v = row[c.key]
+        const v = (row as Record<string, unknown>)[c.key]
         return v == null ? '' : (v as string | number)
       })
     )
@@ -174,7 +177,7 @@ export function ReportTable<T extends Record<string, unknown>>({
                             : 'text-left'
                       }`}
                     >
-                      {col.render ? col.render(row) : String(row[col.key] ?? '—')}
+                      {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '—')}
                     </td>
                   ))}
                 </tr>
