@@ -32,6 +32,7 @@ export interface InvoiceLineDto {
   mrp: number
   quantity: number
   unit: string
+  /** Ex-GST rate per unit (derived from MRP when GST applies) */
   pricePerUnit: number
   lineTotal: number
   discountType: DiscountType

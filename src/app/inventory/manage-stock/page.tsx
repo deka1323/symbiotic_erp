@@ -410,11 +410,17 @@ export default function ManageStockPage() {
   }
 
   const stockColumns: Column<any>[] = [
-    { key: 'skuName', header: 'SKU Name', render: (r) => <span className="text-xs font-medium text-gray-900">{r.sku?.name || '—'}</span> },
-    { key: 'skuCode', header: 'SKU Code', render: (r) => <span className="text-xs text-gray-600">{r.sku?.code || r.skuId || '—'}</span> },
+    { key: 'skuName', header: 'SKU Name', exportKey: 'sku.name', render: (r) => <span className="text-xs font-medium text-gray-900">{r.sku?.name || '—'}</span> },
+    {
+      key: 'skuCode',
+      header: 'SKU Code',
+      exportValue: (r) => r.sku?.code || r.skuId || '—',
+      render: (r) => <span className="text-xs text-gray-600">{r.sku?.code || r.skuId || '—'}</span>,
+    },
     {
       key: 'totalQuantity',
       header: 'Quantity',
+      exportValue: (r) => parseQuantityFromDb(r.totalQuantity),
       render: (r) => (
         <span
           className={`text-xs font-semibold tabular-nums ${
@@ -428,6 +434,7 @@ export default function ManageStockPage() {
     {
       key: 'actions',
       header: 'Actions',
+      skipExport: true,
       render: (r) => (
         <div className="flex items-center gap-3">
           <button
@@ -453,6 +460,7 @@ export default function ManageStockPage() {
     {
       key: 'sku',
       header: 'SKU',
+      exportKey: 'sku',
       render: (r) => (
         <div>
           <div className="text-xs font-medium text-gray-900">{r.sku?.name || '-'}</div>
@@ -463,6 +471,7 @@ export default function ManageStockPage() {
     {
       key: 'batch',
       header: 'Batch',
+      exportKey: 'batch.batchId',
       render: (r) => (
         <div className="text-xs text-gray-700">{r.batch?.batchId || 'N/A'}</div>
       ),
@@ -470,6 +479,7 @@ export default function ManageStockPage() {
     {
       key: 'oldQuantity',
       header: 'Old Quantity',
+      exportValue: (r) => parseQuantityFromDb(r.oldQuantity),
       render: (r) => (
         <div className="text-xs text-gray-700">{formatQuantity(r.oldQuantity)}</div>
       ),
@@ -477,6 +487,7 @@ export default function ManageStockPage() {
     {
       key: 'newQuantity',
       header: 'New Quantity',
+      exportValue: (r) => parseQuantityFromDb(r.newQuantity),
       render: (r) => (
         <div className="text-xs font-semibold text-gray-900">{formatQuantity(r.newQuantity)}</div>
       ),
@@ -493,6 +504,7 @@ export default function ManageStockPage() {
     {
       key: 'user',
       header: 'Updated By',
+      exportKey: 'user',
       render: (r) => (
         <div className="text-xs text-gray-600">
           {r.user?.fullName || r.user?.username || r.user?.email || '—'}
@@ -502,6 +514,7 @@ export default function ManageStockPage() {
     {
       key: 'createdAt',
       header: 'Date',
+      exportValue: (r) => formatSiteDateAndTime(r.createdAt),
       render: (r) => (
         <div className="text-xs text-gray-600">
           {formatSiteDateAndTime(r.createdAt)}
@@ -514,6 +527,7 @@ export default function ManageStockPage() {
     {
       key: 'sku',
       header: 'SKU',
+      exportKey: 'sku',
       render: (r) => (
         <div>
           <div className="text-xs font-medium text-gray-900">{r.sku?.name || '-'}</div>
@@ -524,14 +538,15 @@ export default function ManageStockPage() {
     {
       key: 'consumedQty',
       header: 'Consumed Qty',
+      exportValue: (r) => Math.max(0, parseQuantityFromDb(r.oldQuantity) - parseQuantityFromDb(r.newQuantity)),
       render: (r) => (
         <div className="text-xs font-semibold text-rose-700">
           {formatQuantity(Math.max(0, parseQuantityFromDb(r.oldQuantity) - parseQuantityFromDb(r.newQuantity)))}
         </div>
       ),
     },
-    { key: 'oldQuantity', header: 'Before', render: (r) => <div className="text-xs text-gray-700">{formatQuantity(r.oldQuantity)}</div> },
-    { key: 'newQuantity', header: 'After', render: (r) => <div className="text-xs font-semibold text-gray-900">{formatQuantity(r.newQuantity)}</div> },
+    { key: 'oldQuantity', header: 'Before', exportValue: (r) => parseQuantityFromDb(r.oldQuantity), render: (r) => <div className="text-xs text-gray-700">{formatQuantity(r.oldQuantity)}</div> },
+    { key: 'newQuantity', header: 'After', exportValue: (r) => parseQuantityFromDb(r.newQuantity), render: (r) => <div className="text-xs font-semibold text-gray-900">{formatQuantity(r.newQuantity)}</div> },
     {
       key: 'reason',
       header: 'Reason',
@@ -544,11 +559,13 @@ export default function ManageStockPage() {
     {
       key: 'user',
       header: 'Updated By',
+      exportKey: 'user',
       render: (r) => <div className="text-xs text-gray-600">{r.user?.fullName || r.user?.username || r.user?.email || '—'}</div>,
     },
     {
       key: 'createdAt',
       header: 'Date',
+      exportValue: (r) => formatSiteDateAndTime(r.createdAt),
       render: (r) => <div className="text-xs text-gray-600">{formatSiteDateAndTime(r.createdAt)}</div>,
     },
   ]

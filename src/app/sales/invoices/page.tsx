@@ -101,22 +101,26 @@ export default function InvoicesPage() {
     {
       key: 'invoiceDate',
       header: 'Date',
+      exportValue: (r) => formatInvoiceDate(String(r.invoiceDate).slice(0, 10)),
       render: (r) => formatInvoiceDate(String(r.invoiceDate).slice(0, 10)),
     },
     { key: 'customerName', header: 'Customer' },
     {
       key: 'totalAmount',
       header: 'Total',
+      exportValue: (r) => parseDecimal(r.totalAmount),
       render: (r) => formatInr(parseDecimal(r.totalAmount)),
     },
     {
       key: 'receivedAmount',
       header: 'Received',
+      exportValue: (r) => parseDecimal(r.receivedAmount),
       render: (r) => formatInr(parseDecimal(r.receivedAmount)),
     },
     {
       key: 'isActive',
       header: 'Status',
+      exportValue: (r) => (r.isActive ? 'Active' : 'Inactive'),
       render: (r) => (
         <span
           className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${

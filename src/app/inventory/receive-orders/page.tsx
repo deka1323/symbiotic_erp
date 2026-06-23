@@ -183,6 +183,7 @@ export default function ReceiveOrdersPage() {
     {
       key: 'fromInventory',
       header: 'From',
+      exportKey: 'purchaseOrder.toInventory.name',
       render: (r) => (
         <div className="text-xs text-gray-900">{r.purchaseOrder?.toInventory?.name || '-'}</div>
       ),
@@ -190,6 +191,7 @@ export default function ReceiveOrdersPage() {
     {
       key: 'items',
       header: 'Items',
+      exportKey: 'toItems',
       render: (r) => (
         <span className="text-xs text-gray-600">{r.toItems ? r.toItems.length : 0}</span>
       ),
@@ -197,6 +199,7 @@ export default function ReceiveOrdersPage() {
     {
       key: 'employee',
       header: 'Employee',
+      exportKey: 'employee',
       render: (r) => (
         <div className="text-xs text-gray-600">{r.employee?.name || '-'}</div>
       ),
@@ -222,6 +225,7 @@ export default function ReceiveOrdersPage() {
     {
       key: 'purchaseOrder',
       header: 'PO#',
+      exportKey: 'transferOrder.purchaseOrder.poNumber',
       render: (r) => (
         <div className="text-xs text-gray-900">{r.transferOrder?.purchaseOrder?.poNumber || 'N/A'}</div>
       ),
@@ -229,6 +233,7 @@ export default function ReceiveOrdersPage() {
     {
       key: 'fromInventory',
       header: 'From',
+      exportKey: 'transferOrder.purchaseOrder.toInventory.name',
       render: (r) => (
         <div className="text-xs text-gray-900">
           {r.transferOrder?.purchaseOrder?.toInventory?.name ?? 'N/A'}
@@ -238,6 +243,7 @@ export default function ReceiveOrdersPage() {
     {
       key: 'items',
       header: 'Items',
+      exportKey: 'roItems',
       render: (r) => (
         <span className="text-xs text-gray-600">{r.roItems ? r.roItems.length : 0}</span>
       ),
@@ -245,6 +251,7 @@ export default function ReceiveOrdersPage() {
     {
       key: 'createdBy',
       header: 'Created By',
+      exportKey: 'createdBy',
       render: (r) => (
         <div className="text-xs text-gray-600">
           {r.createdBy?.fullName || r.createdBy?.username || r.createdBy?.email || '—'}
@@ -254,6 +261,7 @@ export default function ReceiveOrdersPage() {
     {
       key: 'createdAt',
       header: 'Created At',
+      exportValue: (r) => formatSiteDateAndTime(r.createdAt),
       render: (r) => (
         <div className="text-xs text-gray-600">
           {formatSiteDateAndTime(r.createdAt)}

@@ -3,11 +3,21 @@ export function roundMoney(n: number): number {
   return Math.round(n * 100) / 100
 }
 
+/** Round final invoice amount to nearest rupee (no paise) */
+export function roundFinalAmount(n: number): number {
+  return Math.round(n)
+}
+
 export type DiscountType = 'none' | 'amount' | 'percent'
 
 export interface LineInvoiceCalc {
+  /** Catalog / entered MRP (GST-inclusive when GST applies) */
+  mrp: number
+  /** Ex-GST unit price: MRP / (1 + GST%/100) */
+  rate: number
+  /** Same as rate — stored as price_per_unit in DB and shown in UI */
   pricePerUnit: number
-  /** MRP column = price per unit */
+  /** @deprecated use mrp */
   displayMrp: number
   quantity: number
   discountType: DiscountType
@@ -15,6 +25,9 @@ export interface LineInvoiceCalc {
   discountPerUnit: number
   discountAmount: number
   discountDisplayPercent: number
+  /** Net rate per unit after discount (calculation only) */
+  netRatePerUnit: number
+  /** Net ex-GST line base = netRatePerUnit × qty */
   taxableAmount: number
   gstPercent: number
   gstAmount: number
@@ -22,7 +35,8 @@ export interface LineInvoiceCalc {
 }
 
 export interface LineCalcInput {
-  pricePerUnit: number
+  /** MRP from SKU or custom line (GST-inclusive when GST applies) */
+  mrp: number
   quantity: number
   gstPercent: number
   applyGst: boolean
@@ -31,50 +45,60 @@ export interface LineCalcInput {
 }
 
 /**
- * MRP = price per unit.
- * Taxable = (price − discount per unit) × qty.
- * Amount = taxable + GST (GST% on taxable when applyGst).
+ * Rate = MRP / (1 + GST%/100)
+ * Discount applies on Rate (per unit), not on MRP.
+ * Net Rate = Rate − discount per unit
+ * GST Amount (per unit) = Net Rate × GST%
+ * Final Amount (per unit) = Net Rate + GST Amount
+ * Line final amount is rounded to the nearest rupee.
+ * When GST% = 0, Rate = MRP and GST Amount = 0.
  */
 export function calculateInvoiceLine(input: LineCalcInput): LineInvoiceCalc {
-  const price = roundMoney(input.pricePerUnit)
+  const mrp = roundMoney(input.mrp)
   const qty = input.quantity
   const discountType: DiscountType = input.discountType || 'none'
   const discountValue = input.discountValue ?? 0
+
+  const gstPct =
+    input.applyGst && input.gstPercent > 0 ? roundMoney(input.gstPercent) : 0
+
+  const rate =
+    gstPct > 0 ? roundMoney(mrp / (1 + gstPct / 100)) : mrp
 
   let discountPerUnit = 0
   let discountDisplayPercent = 0
 
   if (discountType === 'amount') {
-    discountPerUnit = roundMoney(Math.min(Math.max(0, discountValue), price))
+    discountPerUnit = roundMoney(Math.min(Math.max(0, discountValue), rate))
   } else if (discountType === 'percent') {
     discountDisplayPercent = Math.max(0, discountValue)
-    discountPerUnit = roundMoney(price * (discountDisplayPercent / 100))
+    discountPerUnit = roundMoney(rate * (discountDisplayPercent / 100))
   }
+
+  const netRatePerUnit = roundMoney(Math.max(0, rate - discountPerUnit))
+  const gstAmountPerUnit =
+    gstPct > 0 ? roundMoney(netRatePerUnit * (gstPct / 100)) : 0
+  const finalAmountPerUnit = roundMoney(netRatePerUnit + gstAmountPerUnit)
 
   const discountAmount = roundMoney(discountPerUnit * qty)
-  const netPerUnit = roundMoney(Math.max(0, price - discountPerUnit))
-  const taxableAmount = roundMoney(netPerUnit * qty)
-
-  let gstPercent = 0
-  let gstAmount = 0
-  if (input.applyGst && input.gstPercent > 0) {
-    gstPercent = input.gstPercent
-    gstAmount = roundMoney(taxableAmount * (gstPercent / 100))
-  }
-
-  const lineTotal = roundMoney(taxableAmount + gstAmount)
+  const taxableAmount = roundMoney(netRatePerUnit * qty)
+  const gstAmount = roundMoney(gstAmountPerUnit * qty)
+  const lineTotal = roundFinalAmount(finalAmountPerUnit * qty)
 
   return {
-    pricePerUnit: price,
-    displayMrp: price,
+    mrp,
+    rate,
+    pricePerUnit: rate,
+    displayMrp: mrp,
     quantity: qty,
     discountType,
     discountValue,
     discountPerUnit,
     discountAmount,
     discountDisplayPercent,
+    netRatePerUnit,
     taxableAmount,
-    gstPercent,
+    gstPercent: gstPct,
     gstAmount,
     lineTotal,
   }
@@ -87,7 +111,7 @@ export function calculateLineGst(
   gstPercent: number,
   applyGst: boolean
 ): LineInvoiceCalc {
-  return calculateInvoiceLine({ pricePerUnit: skuPrice, quantity, gstPercent, applyGst })
+  return calculateInvoiceLine({ mrp: skuPrice, quantity, gstPercent, applyGst })
 }
 
 export interface TaxSummaryRow {

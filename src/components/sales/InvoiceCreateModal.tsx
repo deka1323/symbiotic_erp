@@ -8,6 +8,7 @@ import { formatInr, parseDecimal } from '@/lib/sales/formatCurrency'
 import {
   calculateInvoiceLine,
   roundMoney,
+  roundFinalAmount,
   type DiscountType,
 } from '@/lib/sales/gstCalculations'
 import { formatInvoiceDate } from '@/lib/sales/mapInvoice'
@@ -60,14 +61,14 @@ function lineLabel(l: LineDraft) {
   return l.kind === 'sku' ? l.sku.name : l.itemName
 }
 
-function linePrice(l: LineDraft) {
+function lineMrp(l: LineDraft) {
   return l.kind === 'sku' ? parseDecimal(l.sku.price) : l.pricePerUnit
 }
 
 function calcDraftLine(l: LineDraft, gstRate: number, applyGst: boolean) {
   const qty = l.quantity >= 1 ? l.quantity : 0
   return calculateInvoiceLine({
-    pricePerUnit: linePrice(l),
+    mrp: lineMrp(l),
     quantity: qty,
     gstPercent: gstRate,
     applyGst,
@@ -218,14 +219,14 @@ export function InvoiceCreateModal({
   )
 
   const subTotal = useMemo(
-    () => roundMoney(lineCalcs.reduce((sum, c) => sum + c.lineTotal, 0)),
+    () => roundFinalAmount(lineCalcs.reduce((sum, c) => sum + c.lineTotal, 0)),
     [lineCalcs]
   )
 
   const allQuantitiesValid = lines.length > 0 && lines.every((l) => l.quantity >= 1)
 
   useEffect(() => {
-    if (!receivedEdited) setReceivedAmount(subTotal.toFixed(2))
+    if (!receivedEdited) setReceivedAmount(String(subTotal))
   }, [subTotal, receivedEdited])
 
   const customerOptions = customers.map((c) => ({ value: c.id, label: c.name }))
@@ -294,7 +295,7 @@ export function InvoiceCreateModal({
       return
     }
     if (!Number.isFinite(price) || price < 0) {
-      setError('Enter a valid price for custom item')
+      setError('Enter a valid MRP for custom item')
       return
     }
     if (!qty || qty < 1) {
@@ -437,7 +438,7 @@ export function InvoiceCreateModal({
                 <tr key={l.localId} className="border-t border-gray-100">
                   <td className="p-2">{i + 1}</td>
                   <td className="p-2 font-medium">{lineLabel(l)}</td>
-                  <td className="p-2 text-right">{formatInr(linePrice(l))}</td>
+                  <td className="p-2 text-right">{formatInr(calc.pricePerUnit)}</td>
                   <td className="p-2">
                     {preview ? (
                       <span className="block text-center">{l.quantity}</span>
@@ -705,7 +706,7 @@ export function InvoiceCreateModal({
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium truncate">{sku.name}</div>
                           <div className="text-[10px] text-gray-500">
-                            {formatInr(parseDecimal(sku.price))}/{sku.unit}
+                            MRP {formatInr(parseDecimal(sku.price))}/{sku.unit}
                           </div>
                         </div>
                         {pickerSelected.has(sku.id) && (
@@ -773,7 +774,7 @@ export function InvoiceCreateModal({
                   type="number"
                   min={0}
                   step="0.01"
-                  placeholder="Price *"
+                  placeholder={applyGst ? 'MRP *' : 'Price *'}
                   className="input text-xs"
                   value={customDraft.pricePerUnit}
                   onChange={(e) => setCustomDraft((d) => ({ ...d, pricePerUnit: e.target.value }))}

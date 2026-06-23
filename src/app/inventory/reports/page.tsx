@@ -1,48 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { DataTable, Column } from '@/components/DataTable'
-import { authFetch } from '@/lib/fetch'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { BarChart3 } from 'lucide-react'
 
-export default function InventoryReportsPage() {
-  const [data, setData] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [type, setType] = useState<'stock_levels' | 'transfer_history' | 'production_summary'>('stock_levels')
+/** Legacy route — reports live on the Home dashboard. */
+export default function InventoryReportsRedirectPage() {
+  const router = useRouter()
 
-  const fetchReport = async () => {
-    try {
-      setIsLoading(true)
-      const res = await authFetch(`/api/inventory/reports?type=${type}`)
-      const json = await res.json()
-      setData(json.data || [])
-    } catch (err) {
-      console.error(err)
-      setData([])
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => { fetchReport() }, [type])
+  useEffect(() => {
+    router.replace('/dashboard')
+  }, [router])
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Inventory Reports</h2>
-        <div className="flex gap-2">
-          <select value={type} onChange={(e) => setType(e.target.value as any)} className="input text-xs">
-            <option value="stock_levels">Stock Levels</option>
-            <option value="transfer_history">Transfer History</option>
-            <option value="production_summary">Production Summary</option>
-          </select>
-          <button onClick={fetchReport} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">Refresh</button>
-        </div>
-      </div>
-
-      <div>
-        <DataTable columns={[{ key: 'id', header: 'ID' }]} data={data} isLoading={isLoading} exportable />
-      </div>
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <BarChart3 className="w-10 h-10 text-blue-600 mb-3" />
+      <p className="text-sm text-gray-600">Reports are on the Home dashboard…</p>
     </div>
   )
 }
-

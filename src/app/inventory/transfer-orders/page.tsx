@@ -196,6 +196,7 @@ export default function TransferOrdersPage() {
     {
       key: 'items',
       header: 'Items',
+      exportKey: 'poItems',
       render: (row) => (
         <span className="text-xs text-gray-600">{row.poItems ? row.poItems.length : 0}</span>
       ),
@@ -240,6 +241,7 @@ export default function TransferOrdersPage() {
     {
       key: 'fromInventory',
       header: 'From',
+      exportKey: 'purchaseOrder.toInventory.name',
       render: (row) => (
         <span className="text-xs text-gray-700">
           {row.purchaseOrder?.toInventory?.name || '-'}
@@ -249,6 +251,7 @@ export default function TransferOrdersPage() {
     {
       key: 'toInventory',
       header: 'To',
+      exportKey: 'purchaseOrder.fromInventory.name',
       render: (row) => (
         <span className="text-xs text-gray-700">
           {row.purchaseOrder?.fromInventory?.name || '-'}
@@ -276,6 +279,7 @@ export default function TransferOrdersPage() {
     {
       key: 'createdAt',
       header: 'Created At',
+      exportValue: (row) => formatSiteDateAndTime(row.createdAt),
       render: (row) => (
         <span className="text-xs text-gray-600">
           {formatSiteDateAndTime(row.createdAt)}

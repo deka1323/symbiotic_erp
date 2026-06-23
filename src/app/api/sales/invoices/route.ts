@@ -7,6 +7,7 @@ import {
   calculateInvoiceLine,
   lineNameFromSku,
   roundMoney,
+  roundFinalAmount,
   type DiscountType,
 } from '@/lib/sales/gstCalculations'
 
@@ -189,7 +190,7 @@ export async function POST(req: NextRequest) {
 
       if (line.type === 'custom') {
         const calc = calculateInvoiceLine({
-          pricePerUnit: line.pricePerUnit,
+          mrp: line.pricePerUnit,
           quantity: line.quantity,
           gstPercent,
           applyGst,
@@ -201,7 +202,7 @@ export async function POST(req: NextRequest) {
           skuId: null,
           lineNo: lineNo++,
           itemName: line.itemName.trim(),
-          mrp: calc.displayMrp,
+          mrp: calc.mrp,
           quantity: calc.quantity,
           unit: line.unit.trim(),
           pricePerUnit: calc.pricePerUnit,
@@ -217,9 +218,9 @@ export async function POST(req: NextRequest) {
         if (!sku) {
           return NextResponse.json({ error: 'Invalid SKU in line items' }, { status: 400 })
         }
-        const price = parseDecimal(sku.price)
+        const mrp = parseDecimal(sku.price)
         const calc = calculateInvoiceLine({
-          pricePerUnit: price,
+          mrp,
           quantity: line.quantity,
           gstPercent,
           applyGst,
@@ -231,7 +232,7 @@ export async function POST(req: NextRequest) {
           skuId: sku.id,
           lineNo: lineNo++,
           itemName: lineNameFromSku(sku),
-          mrp: calc.displayMrp,
+          mrp: calc.mrp,
           quantity: calc.quantity,
           unit: sku.unit,
           pricePerUnit: calc.pricePerUnit,
@@ -245,11 +246,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    subTotal = roundMoney(subTotal)
+    subTotal = roundFinalAmount(subTotal)
     const totalAmount = subTotal
     const receivedAmount =
       validated.receivedAmount !== undefined
-        ? roundMoney(validated.receivedAmount)
+        ? roundFinalAmount(validated.receivedAmount)
         : totalAmount
 
     let invoiceNumber = validated.invoiceNumber

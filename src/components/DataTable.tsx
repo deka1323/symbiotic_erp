@@ -2,6 +2,7 @@
 
 import { ReactNode, useState, useMemo, Fragment } from 'react'
 import { ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
+import { resolveColumnExportValue } from '@/lib/export/tableExport'
 
 export interface Column<T> {
   key: string
@@ -12,6 +13,12 @@ export interface Column<T> {
   subRender?: (row: T) => ReactNode
   /** Optional: custom sort value when doing client-side sort */
   sortValue?: (row: T) => string | number
+  /** Optional: dot-path or field name for Excel export (e.g. `sku.name`) */
+  exportKey?: string
+  /** Optional: explicit Excel cell value (overrides exportKey / row key) */
+  exportValue?: (row: T) => unknown
+  /** Skip this column in Excel export (e.g. action buttons) */
+  skipExport?: boolean
 }
 
 export interface Action<T> {
@@ -176,15 +183,16 @@ export function DataTable<T extends Record<string, any>>({
               }
               try {
                 const XLSX = await import('xlsx')
-                const exportCols = showSerialNumber ? [{ key: '__serial__', header: '#' }, ...columns] : effectiveColumns.filter((c) => c.key !== '__serial__')
+                const exportCols = (showSerialNumber ? [{ key: '__serial__', header: '#' }, ...columns] : effectiveColumns.filter((c) => c.key !== '__serial__'))
+                  .filter((col) => col.key !== 'actions' && !col.skipExport)
                 const rows = data.map((row, i) =>
                   exportCols.reduce(
                     (acc, col) => {
                       if (col.key === '__serial__') acc['#'] = i + 1
-                      else acc[col.header] = col.render ? String(col.render(row)) : row[col.key]
+                      else acc[col.header] = resolveColumnExportValue(row, col)
                       return acc
                     },
-                    {} as Record<string, any>
+                    {} as Record<string, string | number | boolean>
                   )
                 )
                 const ws = XLSX.utils.json_to_sheet(rows)

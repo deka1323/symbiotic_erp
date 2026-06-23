@@ -150,6 +150,7 @@ export default function PurchaseOrdersPage() {
     {
       key: 'toNumber',
       header: 'TO#',
+      exportValue: (row) => row.transferOrders?.[0]?.toNumber ?? 'N/A',
       render: (row) => (
         <div className="text-xs text-gray-900">
           {row.transferOrders?.[0]?.toNumber ?? 'N/A'}
@@ -159,6 +160,7 @@ export default function PurchaseOrdersPage() {
     {
       key: 'roNumber',
       header: 'RO#',
+      exportValue: (row) => row.transferOrders?.[0]?.receiveOrder?.roNumber ?? 'N/A',
       render: (row) => (
         <div className="text-xs text-gray-900">
           {row.transferOrders?.[0]?.receiveOrder?.roNumber ?? 'N/A'}
@@ -182,6 +184,7 @@ export default function PurchaseOrdersPage() {
     {
       key: 'items',
       header: 'Items',
+      exportKey: 'poItems',
       render: (r) => (
         <span className="text-xs text-gray-600">{r.poItems ? r.poItems.length : 0}</span>
       ),
@@ -198,6 +201,7 @@ export default function PurchaseOrdersPage() {
     {
       key: 'createdAt',
       header: 'Created At',
+      exportValue: (r) => formatSiteDateAndTime(r.createdAt),
       render: (r) => (
         <div className="text-xs text-gray-600">
           {formatSiteDateAndTime(r.createdAt)}

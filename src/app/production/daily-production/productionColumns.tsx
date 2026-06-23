@@ -26,12 +26,14 @@ export function getProductionColumns(): Column<BatchForColumn>[] {
       header: 'Date',
       sortable: true,
       sortValue: (r) => new Date(r.productionDate).getTime(),
+      exportValue: (r) => formatSiteDate(r.productionDate),
       render: (r) => formatSiteDate(r.productionDate),
     },
     {
       key: 'batchItems',
       header: 'Items & quantities',
       sortable: false,
+      exportKey: 'batchItems',
       render: (r) =>
         (r.batchItems || []).map((bi) => `${bi.sku?.name || bi.sku?.code || bi.skuId}: ${bi.quantity}`).join('; ') || '-',
       subRender: (r) => {
@@ -63,6 +65,7 @@ export function getProductionColumns(): Column<BatchForColumn>[] {
       header: 'Created By',
       sortable: true,
       sortValue: (r) => r.createdBy?.fullName || r.createdBy?.username || r.createdBy?.email || '',
+      exportKey: 'createdBy',
       render: (r) => r.createdBy?.fullName || r.createdBy?.username || r.createdBy?.email || '-',
     },
     {
@@ -70,6 +73,7 @@ export function getProductionColumns(): Column<BatchForColumn>[] {
       header: 'Created At',
       sortable: true,
       sortValue: (r) => (r as any).createdAt ? new Date((r as any).createdAt).getTime() : 0,
+      exportValue: (r) => ((r as any).createdAt ? formatSiteDateTime((r as any).createdAt) : '-'),
       render: (r) => ((r as any).createdAt ? formatSiteDateTime((r as any).createdAt) : '-'),
     },
   ]
